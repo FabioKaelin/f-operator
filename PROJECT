@@ -8,7 +8,7 @@ layout:
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
-projectName: f-operator2
+projectName: f-operator
 repo: github.com/fabiokaelin/f-operator
 resources:
 - api:
