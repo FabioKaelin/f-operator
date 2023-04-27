@@ -28,14 +28,29 @@ type FdeploymentSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Fdeployment. Edit fdeployment_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	Component string `json:"component"`
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	App string `json:"app"`
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	Path string `json:"path,omitempty"`
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	Port int32 `json:"port,omitempty"`
 }
 
 // FdeploymentStatus defines the observed state of Fdeployment
 type FdeploymentStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// +operator-sdk:csv:customresourcedefinitions:type=status
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
 //+kubebuilder:object:root=true
