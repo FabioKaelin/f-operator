@@ -19,3 +19,4 @@ spec:
       path: "/"
     readinessProbe:
       path: "/"
+  host: "testapplication.fabkli.ch"

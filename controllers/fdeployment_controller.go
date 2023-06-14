@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	networking "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -262,7 +263,6 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	} else if err != nil {
 		flog.Info(err, "Failed to get ServiceAccount")
-		// Let's return the error for the reconciliation be re-trigged again
 		return ctrl.Result{}, err
 	}
 
@@ -309,9 +309,101 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// and move forward for the next operations
 		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	} else if err != nil {
-		// log.Error(err, "Failed to get Deployment")
 		flog.Info(err, "Failed to get Deployment")
-		// Let's return the error for the reconciliation be re-trigged again
+		return ctrl.Result{}, err
+	}
+
+	// Check if the deployment already exists, if not create a new one
+	foundService := &corev1.Service{}
+	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, foundService)
+	if err != nil && apierrors.IsNotFound(err) {
+		// Define a new deployment
+		svc, err := r.serviceForFDeployment(fdeployment)
+		if err != nil {
+			flog.Info(err, "Failed to define new Service resource for fdeployment")
+			// log.Error(err, "Failed to define new Deployment resource for fdeployment")
+
+			// The following implementation will update the status
+			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
+				Status: metav1.ConditionFalse, Reason: "Reconciling",
+				Message: fmt.Sprintf("Failed to create Service for the custom resource (%s): (%s)", fdeployment.Name, err)})
+
+			flog.Info("Update 5 before")
+			err := r.Status().Update(ctx, fdeployment)
+			flog.Info("Update 5 after")
+
+			if err != nil {
+				flog.Info(err, "Failed to update fdeployment status 3")
+				// log.Error(err, "Failed to update fdeployment status")
+				return ctrl.Result{}, err
+			}
+
+			return ctrl.Result{}, err
+		}
+		flog.Info("Creating a new Service")
+		// log.Info("Creating a new Deployment",
+		// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+
+		if err = r.Create(ctx, svc); err != nil {
+			flog.Info(err, "Failed to create new Service")
+			// log.Error(err, "Failed to create new Deployment",
+			// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+			return ctrl.Result{}, err
+		}
+
+		// Deployment created successfully
+		// We will requeue the reconciliation so that we can ensure the state
+		// and move forward for the next operations
+		return ctrl.Result{RequeueAfter: time.Minute}, nil
+	} else if err != nil {
+		flog.Info(err, "Failed to get Deployment")
+		return ctrl.Result{}, err
+	}
+
+	// Check if the deployment already exists, if not create a new one
+	foundIngress := &networking.Ingress{}
+	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, foundIngress)
+	if err != nil && apierrors.IsNotFound(err) {
+		// Define a new deployment
+		ing, err := r.ingressForFDeployment(fdeployment)
+		if err != nil {
+			flog.Info(err, "Failed to define new Ingress resource for fdeployment")
+			// log.Error(err, "Failed to define new Deployment resource for fdeployment")
+
+			// The following implementation will update the status
+			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
+				Status: metav1.ConditionFalse, Reason: "Reconciling",
+				Message: fmt.Sprintf("Failed to create Ingress for the custom resource (%s): (%s)", fdeployment.Name, err)})
+
+			flog.Info("Update 5 before")
+			err := r.Status().Update(ctx, fdeployment)
+			flog.Info("Update 5 after")
+
+			if err != nil {
+				flog.Info(err, "Failed to update fdeployment status 3")
+				// log.Error(err, "Failed to update fdeployment status")
+				return ctrl.Result{}, err
+			}
+
+			return ctrl.Result{}, err
+		}
+		flog.Info("Creating a new Ingress")
+		// log.Info("Creating a new Deployment",
+		// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+
+		if err = r.Create(ctx, ing); err != nil {
+			flog.Info(err, "Failed to create new Ingress")
+			// log.Error(err, "Failed to create new Deployment",
+			// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+			return ctrl.Result{}, err
+		}
+
+		// Deployment created successfully
+		// We will requeue the reconciliation so that we can ensure the state
+		// and move forward for the next operations
+		return ctrl.Result{RequeueAfter: time.Minute}, nil
+	} else if err != nil {
+		flog.Info(err, "Failed to get Deployment")
 		return ctrl.Result{}, err
 	}
 
@@ -532,6 +624,88 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 	return dep, nil
 }
 
+// deploymentForFDeployment returns a FDeployment service object
+func (r *FdeploymentReconciler) serviceForFDeployment(
+	fdeployment *k8sv1.Fdeployment) (*corev1.Service, error) {
+	// path := fdeployment.Spec.Path
+	// replicas := fdeployment.Spec.Replicas
+	port := fdeployment.Spec.Port
+	name := fdeployment.Name
+	// image := fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
+	// ls := labelsForFDeployment(fdeployment.Name, image)
+
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: fdeployment.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app.kubernetes.io/name": name,
+			},
+			Ports: []corev1.ServicePort{{
+				Port:       80,
+				TargetPort: intstr.FromInt(int(port)),
+				Protocol:   corev1.ProtocolTCP,
+			}},
+		},
+	}
+
+	// Set the ownerRef for the Deployment
+	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+	if err := ctrl.SetControllerReference(fdeployment, svc, r.Scheme); err != nil {
+		return nil, err
+	}
+	return svc, nil
+}
+
+// deploymentForFDeployment returns a FDeployment ingress object
+func (r *FdeploymentReconciler) ingressForFDeployment(
+	fdeployment *k8sv1.Fdeployment) (*networking.Ingress, error) {
+	path := fdeployment.Spec.Path
+	// replicas := fdeployment.Spec.Replicas
+	// port := fdeployment.Spec.Port
+	name := fdeployment.Name
+	host := fdeployment.Spec.Host
+	// image := fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
+	// ls := labelsForFDeployment(fdeployment.Name, image)
+
+	// ingress networking.k8s.io/v1
+	ing := &networking.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: fdeployment.Namespace,
+		},
+		Spec: networking.IngressSpec{
+			Rules: []networking.IngressRule{{
+				Host: host,
+				IngressRuleValue: networking.IngressRuleValue{
+					HTTP: &networking.HTTPIngressRuleValue{
+						Paths: []networking.HTTPIngressPath{{
+							Path: path,
+							Backend: networking.IngressBackend{
+								Service: &networking.IngressServiceBackend{
+									Name: name,
+									Port: networking.ServiceBackendPort{
+										Number: 80,
+									},
+								},
+							},
+						}},
+					},
+				},
+			}},
+		},
+	}
+
+	// Set the ownerRef for the Deployment
+	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+	if err := ctrl.SetControllerReference(fdeployment, ing, r.Scheme); err != nil {
+		return nil, err
+	}
+	return ing, nil
+}
+
 // deploymentForFDeployment returns a FDeployment Deployment object
 func (r *FdeploymentReconciler) serviceAccountForFDeployment(
 	fdeployment *k8sv1.Fdeployment) (*corev1.ServiceAccount, error) {
@@ -544,7 +718,6 @@ func (r *FdeploymentReconciler) serviceAccountForFDeployment(
 			// Namespace: app,
 			Namespace: fdeployment.Namespace,
 		},
-		AutomountServiceAccountToken: &[]bool{false}[0],
 	}
 
 	// Set the ownerRef for the ServiceAccount
@@ -560,10 +733,10 @@ func (r *FdeploymentReconciler) serviceAccountForFDeployment(
 func labelsForFDeployment(name string, image string) map[string]string {
 	var imageTag string
 	return map[string]string{
-		// "app.kubernetes.io/name":     "Memcached",
+		"app.kubernetes.io/name":     name,
 		"app.kubernetes.io/instance": name,
 		"app.kubernetes.io/version":  imageTag,
-		// "app.kubernetes.io/part-of":    "f-operator",
+		"app.kubernetes.io/part-of":  "f-operator",
 		// "app.kubernetes.io/created-by": "controller-manager",
 	}
 }

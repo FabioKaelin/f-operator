@@ -54,6 +54,8 @@ spec:
                 - livenessProbe
                 - readinessProbe
                 type: object
+              host:
+                type: string
               path:
                 type: string
               port:
@@ -94,7 +96,10 @@ spec:
                 type: string
             required:
             - healthCheck
+            - host
+            - path
             - port
+            - replicas
             - resources
             type: object
           status:

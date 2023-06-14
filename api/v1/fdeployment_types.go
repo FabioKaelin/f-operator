@@ -28,13 +28,15 @@ type FdeploymentSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Path string `json:"path,omitempty"`
+	Path string `json:"path"`
+
+	Host string `json:"host"`
 
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=5
 	// +kubebuilder:validation:ExclusiveMaximum=false
 
-	Replicas int32 `json:"replicas,omitempty"`
+	Replicas int32 `json:"replicas"`
 
 	Port int32 `json:"port"`
 
