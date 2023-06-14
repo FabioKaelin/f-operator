@@ -4,7 +4,7 @@ metadata:
   name: testapplication-backend
 spec:
   path: "/"
-  replicas: 1
+  replicas: 2
   port: 8080
   tag: "1.0.0"
   resources:

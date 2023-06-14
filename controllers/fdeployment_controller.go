@@ -384,7 +384,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 	replicas := fdeployment.Spec.Replicas
 	port := fdeployment.Spec.Port
 	name := fdeployment.Name
-	image := fmt.Sprintf("ghcr.io/fabiokaelin/%s", fdeployment.Name)
+	image := fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
 	ls := labelsForFDeployment(fdeployment.Name, image)
 
 	dep := &appsv1.Deployment{
@@ -403,28 +403,25 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
+					// automountServiceAccountToken: false
+
+					AutomountServiceAccountToken: &[]bool{false}[0],
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: &[]bool{true}[0],
-						// IMPORTANT: seccomProfile was introduced with Kubernetes 1.19
-						// If you are looking for to produce solutions to be supported
-						// on lower versions you must remove this option.
 						SeccompProfile: &corev1.SeccompProfile{
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
 					},
-					// add toleration for kubernetes.azure.com/scalesetpriority spot
 					Tolerations: []corev1.Toleration{{
 						Key:      "kubernetes.azure.com/scalesetpriority",
 						Operator: corev1.TolerationOpEqual,
 						Value:    "spot",
-						// schedule on all nodes
-						Effect: corev1.TaintEffectNoSchedule,
+						Effect:   corev1.TaintEffectNoSchedule,
 					}},
 
 					Containers: []corev1.Container{{
 						Image: image,
 						Name:  name,
-						// resources
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
 								"cpu":    resource.MustParse(fdeployment.Spec.Resources.Requests.CPU),
@@ -437,20 +434,8 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 						},
 
 						// ImagePullPolicy: corev1.PullIfNotPresent,
-						// Ensure restrictive context for the container
-						// More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
 						SecurityContext: &corev1.SecurityContext{
-							// 	// WARNING: Ensure that the image used defines an UserID in the Dockerfile
-							// 	// otherwise the Pod will not run and will fail with "container has runAsNonRoot and image has non-numeric user"".
-							// 	// If you want your workloads admitted in namespaces enforced with the restricted mode in OpenShift/OKD vendors
-							// 	// then, you MUST ensure that the Dockerfile defines a User ID OR you MUST leave the "RunAsNonRoot" and
-							// 	// "RunAsUser" fields empty.
-							RunAsNonRoot: &[]bool{true}[0],
-							// 	// The memcached image does not use a non-zero numeric user as the default user.
-							// 	// Due to RunAsNonRoot field being set to true, we need to force the user in the
-							// 	// container to a non-zero numeric user. We do this using the RunAsUser field.
-							// 	// However, if you are looking to provide solution for K8s vendors like OpenShift
-							// 	// be aware that you cannot run under its restricted-v2 SCC if you set this value.
+							RunAsNonRoot:             &[]bool{true}[0],
 							RunAsUser:                &[]int64{1001}[0],
 							AllowPrivilegeEscalation: &[]bool{false}[0],
 							Capabilities: &corev1.Capabilities{

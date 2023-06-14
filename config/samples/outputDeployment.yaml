@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   annotations:
     deployment.kubernetes.io/revision: "1"
-  creationTimestamp: "2023-06-14T13:02:04Z"
+  creationTimestamp: "2023-06-14T13:34:49Z"
   generation: 1
   name: testapplication-backend
   namespace: ivp-foperator
@@ -13,12 +13,12 @@ metadata:
     controller: true
     kind: Fdeployment
     name: testapplication-backend
-    uid: ba0128ac-3785-475a-90da-cce811dd5909
-  resourceVersion: "4167101"
-  uid: 95647d0c-c6d4-41d5-ad41-85a5e52d0898
+    uid: 22fc23a5-d2ef-441d-a358-6b7b4777f371
+  resourceVersion: "4179404"
+  uid: f2986aa5-b53c-4ed5-9dec-103afeab6b4b
 spec:
   progressDeadlineSeconds: 600
-  replicas: 1
+  replicas: 2
   revisionHistoryLimit: 10
   selector:
     matchLabels:
@@ -36,9 +36,10 @@ spec:
         app.kubernetes.io/instance: testapplication-backend
         app.kubernetes.io/version: ""
     spec:
+      automountServiceAccountToken: false
       containers:
-      - image: ghcr.io/fabiokaelin/testapplication-backend
-        imagePullPolicy: Always
+      - image: ghcr.io/fabiokaelin/testapplication-backend:1.0.0
+        imagePullPolicy: IfNotPresent
         name: testapplication-backend
         ports:
         - containerPort: 8080
@@ -46,8 +47,8 @@ spec:
           protocol: TCP
         resources:
           limits:
-            cpu: 50m
-            memory: 128Mi
+            cpu: 200m
+            memory: 1Gi
           requests:
             cpu: 50m
             memory: 128Mi
@@ -74,21 +75,20 @@ spec:
         operator: Equal
         value: spot
 status:
-  availableReplicas: 1
   conditions:
-  - lastTransitionTime: "2023-06-14T13:02:07Z"
-    lastUpdateTime: "2023-06-14T13:02:07Z"
-    message: Deployment has minimum availability.
-    reason: MinimumReplicasAvailable
-    status: "True"
+  - lastTransitionTime: "2023-06-14T13:34:49Z"
+    lastUpdateTime: "2023-06-14T13:34:49Z"
+    message: Deployment does not have minimum availability.
+    reason: MinimumReplicasUnavailable
+    status: "False"
     type: Available
-  - lastTransitionTime: "2023-06-14T13:02:04Z"
-    lastUpdateTime: "2023-06-14T13:02:07Z"
-    message: ReplicaSet "testapplication-backend-5595b54859" has successfully progressed.
-    reason: NewReplicaSetAvailable
+  - lastTransitionTime: "2023-06-14T13:34:49Z"
+    lastUpdateTime: "2023-06-14T13:34:49Z"
+    message: ReplicaSet "testapplication-backend-69c88c89ff" is progressing.
+    reason: ReplicaSetUpdated
     status: "True"
     type: Progressing
   observedGeneration: 1
-  readyReplicas: 1
-  replicas: 1
-  updatedReplicas: 1
+  replicas: 2
+  unavailableReplicas: 2
+  updatedReplicas: 2
