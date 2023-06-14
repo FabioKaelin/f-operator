@@ -223,10 +223,51 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
-	// Check if the deployment already exists, if not create a new one
-	found := &appsv1.Deployment{}
+	foundServiceAccount := &corev1.ServiceAccount{}
 
-	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, found)
+	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, foundServiceAccount)
+	if err != nil && apierrors.IsNotFound(err) {
+		// Define a new ServiceAccount object
+		svcAcc, err := r.serviceAccountForFDeployment(fdeployment)
+		if err != nil {
+			flog.Info(err, "Failed to define new ServiceAccount resource for fdeployment")
+
+			// The following implementation will update the status
+			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
+				Status: metav1.ConditionFalse, Reason: "Reconciling",
+				Message: fmt.Sprintf("Failed to create ServiceAccount for the custom resource (%s): (%s)", fdeployment.Name, err)})
+
+			flog.Info("Update 5 before")
+			err := r.Status().Update(ctx, fdeployment)
+			flog.Info("Update 5 after")
+
+			if err != nil {
+				flog.Info(err, "Failed to update fdeployment status 3")
+				return ctrl.Result{}, err
+			}
+
+			return ctrl.Result{}, err
+		}
+		flog.Info("Creating a new ServiceAccount")
+
+		if err = r.Create(ctx, svcAcc); err != nil {
+			flog.Info(err, "Failed to create new ServiceAccount")
+			return ctrl.Result{}, err
+		}
+
+		// ServiceAccount created successfully
+		// We will requeue the reconciliation so that we can ensure the state
+		// and move forward for the next operations
+		return ctrl.Result{RequeueAfter: time.Minute}, nil
+	} else if err != nil {
+		flog.Info(err, "Failed to get ServiceAccount")
+		// Let's return the error for the reconciliation be re-trigged again
+		return ctrl.Result{}, err
+	}
+
+	// Check if the deployment already exists, if not create a new one
+	foundDeployment := &appsv1.Deployment{}
+	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, foundDeployment)
 	if err != nil && apierrors.IsNotFound(err) {
 		// Define a new deployment
 		dep, err := r.deploymentForFDeployment(fdeployment)
@@ -274,10 +315,10 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	size := fdeployment.Spec.Replicas
-	found.Spec.Replicas = &size
+	foundDeployment.Spec.Replicas = &size
 
 	flog.Info("Update 6 before (Always (Replicas))")
-	err = r.Update(ctx, found)
+	err = r.Update(ctx, foundDeployment)
 	flog.Info("Update 6 after (Always (Replicas))")
 	if err != nil {
 		// spew.Dump(found)
@@ -406,6 +447,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 					// automountServiceAccountToken: false
 
 					AutomountServiceAccountToken: &[]bool{false}[0],
+					ServiceAccountName:           name,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: &[]bool{true}[0],
 						SeccompProfile: &corev1.SeccompProfile{
@@ -461,6 +503,29 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 		return nil, err
 	}
 	return dep, nil
+}
+
+// deploymentForFDeployment returns a FDeployment Deployment object
+func (r *FdeploymentReconciler) serviceAccountForFDeployment(
+	fdeployment *k8sv1.Fdeployment) (*corev1.ServiceAccount, error) {
+	name := fdeployment.Name
+
+	//create service account
+	svcAcc := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			// Namespace: app,
+			Namespace: fdeployment.Namespace,
+		},
+		AutomountServiceAccountToken: &[]bool{false}[0],
+	}
+
+	// Set the ownerRef for the ServiceAccount
+	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+	if err := ctrl.SetControllerReference(fdeployment, svcAcc, r.Scheme); err != nil {
+		return nil, err
+	}
+	return svcAcc, nil
 }
 
 // labelsForFDeployment returns the labels for selecting the resources
