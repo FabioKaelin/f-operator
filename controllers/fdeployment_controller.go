@@ -29,6 +29,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -39,9 +40,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/davecgh/go-spew/spew"
 	k8sv1 "github.com/fabiokaelin/f-operator/api/v1"
 	"github.com/go-logr/logr"
+
+	utils "github.com/fabiokaelin/f-operator/utils"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -80,7 +82,9 @@ const fdeploymentFinalizer = "k8s.fabkli.ch/finalizer"
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 
 func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	fmt.Println("------------------")
 	log := log.FromContext(ctx)
+	flog := utils.Init()
 	r.Recorder = record.NewFakeRecorder(100)
 	fdeployment := &k8sv1.Fdeployment{}
 	err := r.Get(ctx, req.NamespacedName, fdeployment)
@@ -88,28 +92,31 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if apierrors.IsNotFound(err) {
 			// If the custom resource is not found then, it usually means that it was deleted or not created
 			// In this way, we will stop the reconciliation
-			log.Info("fdeployment resource not found. Ignoring since object must be deleted")
+			// flog.Info("fdeployment resource not found. Ignoring since object must be deleted")
+			flog.Info("fdeployment resource not found. Ignoring since object must be deleted")
+			// log.Info("fdeployment resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		log.Error(err, "Failed to get fdeployment")
+		flog.Info(err, "Failed to get fdeployment")
+		// log.Error(err, "Failed to get fdeployment")
 		return ctrl.Result{}, err
 	}
 
-	// fmt.Println("ooooooooooooooooooooooooooooooo")
+	// flog.Info("ooooooooooooooooooooooooooooooo")
 
-	// fmt.Println("name:", req.Name)
-	// fmt.Println("namespace:", req.Namespace)
-	// fmt.Println("fdeployment")
+	// flog.Info("name:", req.Name)
+	// flog.Info("namespace:", req.Namespace)
+	// flog.Info("fdeployment")
 	// spew.Dump(fdeployment)
-	// fmt.Println("------------")
-	// fmt.Println("req.NamespacedName")
+	// flog.Info("------------")
+	// flog.Info("req.NamespacedName")
 	// spew.Dump(req.NamespacedName)
-	// fmt.Println("ooooooooooooooooooooooooooooooo")
+	// flog.Info("ooooooooooooooooooooooooooooooo")
 
 	// !Let's just set the status as Unknown when no status are available
 	if fdeployment.Status.Conditions == nil || len(fdeployment.Status.Conditions) == 0 {
-		err := r.setStatusToUnknown(ctx, fdeployment, req, log)
+		err := r.setStatusToUnknown(ctx, fdeployment, req, log, flog)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -119,9 +126,11 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Operation cannot be fulfilled on fdeployments.k8s.fabkli.ch \"fdeployment-sample\": the object has been modified; please apply your changes to the latest version and try again
 
 	if !controllerutil.ContainsFinalizer(fdeployment, fdeploymentFinalizer) {
-		log.Info("Adding Finalizer for fdeployment")
+		flog.Info("Adding Finalizer for fdeployment")
+		// log.Info("Adding Finalizer for fdeployment")
 		if ok := controllerutil.AddFinalizer(fdeployment, fdeploymentFinalizer); !ok {
-			log.Error(err, "Failed to add finalizer into the custom resource")
+			flog.Info(err, "Failed to add finalizer into the custom resource")
+			// log.Error(err, "Failed to add finalizer into the custom resource")
 			return ctrl.Result{Requeue: true}, nil
 		}
 
@@ -129,9 +138,13 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// 	log.Error(err, "Failed to re-fetch fdeployment")
 		// 	return ctrl.Result{}, err
 		// }
+		flog.Info("Update 1 before")
+		err = r.Update(ctx, fdeployment)
+		flog.Info("Update 1 after")
 
-		if err = r.Update(ctx, fdeployment); err != nil {
-			log.Error(err, "Failed to update custom resource to add finalizer")
+		if err != nil {
+			flog.Info(err, "Failed to update custom resource to add finalizer")
+			// log.Error(err, "Failed to update custom resource to add finalizer")
 			return ctrl.Result{}, err
 		}
 	} // Check if the fdeployment instance is marked to be deleted, which is
@@ -139,15 +152,21 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	isFDeploymentMarkedToBeDeleted := fdeployment.GetDeletionTimestamp() != nil
 	if isFDeploymentMarkedToBeDeleted {
 		if controllerutil.ContainsFinalizer(fdeployment, fdeploymentFinalizer) {
-			log.Info("Performing Finalizer Operations for fdeployment before delete CR")
+			// log.Info("Performing Finalizer Operations for fdeployment before delete CR")
+			flog.Info("Performing Finalizer Operations for fdeployment before delete CR")
 
 			// Let's add here an status "Downgrade" to define that this resource begin its process to be terminated.
 			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeDegradedFDeployment,
 				Status: metav1.ConditionUnknown, Reason: "Finalizing",
 				Message: fmt.Sprintf("Performing finalizer operations for the custom resource: %s ", fdeployment.Name)})
 
-			if err := r.Status().Update(ctx, fdeployment); err != nil {
-				log.Error(err, "Failed to update fdeployment status")
+			flog.Info("Update 2 before")
+			err := r.Status().Update(ctx, fdeployment)
+			flog.Info("Update 2 after")
+
+			if err != nil {
+				// log.Error(err, "Failed to update fdeployment status")
+				flog.Info(err, "Failed to update fdeployment status 1")
 				return ctrl.Result{}, err
 			}
 
@@ -163,28 +182,41 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			// so that we have the latest state of the resource on the cluster and we will avoid
 			// raise the issue "the object has been modified, please apply
 			// your changes to the latest version and try again" which would re-trigger the reconciliation
-			if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
-				log.Error(err, "Failed to re-fetch fdeployment")
-				return ctrl.Result{}, err
-			}
+			// if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
+			// 	flog.Info(err, "Failed to re-fetch fdeployment")
+			// 	// log.Error(err, "Failed to re-fetch fdeployment")
+			// 	return ctrl.Result{}, err
+			// }
 
 			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeDegradedFDeployment,
 				Status: metav1.ConditionTrue, Reason: "Finalizing",
 				Message: fmt.Sprintf("Finalizer operations for custom resource %s name were successfully accomplished", fdeployment.Name)})
 
-			if err := r.Status().Update(ctx, fdeployment); err != nil {
-				log.Error(err, "Failed to update fdeployment status")
+			flog.Info("Update 3 before")
+			err = r.Status().Update(ctx, fdeployment)
+			flog.Info("Update 3 after")
+
+			if err != nil {
+				flog.Info(err, "Failed to update fdeployment status 2")
+				// log.Error(err, "Failed to update fdeployment status")
 				return ctrl.Result{}, err
 			}
 
-			log.Info("Removing Finalizer for fdeployment after successfully perform the operations")
+			flog.Info("Removing Finalizer for fdeployment after successfully perform the operations")
+			// log.Info("Removing Finalizer for fdeployment after successfully perform the operations")
 			if ok := controllerutil.RemoveFinalizer(fdeployment, fdeploymentFinalizer); !ok {
-				log.Error(err, "Failed to remove finalizer for fdeployment")
+				flog.Info(err, "Failed to remove finalizer for fdeployment")
+				// log.Error(err, "Failed to remove finalizer for fdeployment")
 				return ctrl.Result{Requeue: true}, nil
 			}
 
-			if err := r.Update(ctx, fdeployment); err != nil {
-				log.Error(err, "Failed to remove finalizer for fdeployment")
+			flog.Info("Update 4 before")
+			err = r.Update(ctx, fdeployment)
+			flog.Info("Update 4 after")
+
+			if err != nil {
+				flog.Info(err, "Failed to remove finalizer for fdeployment")
+				// log.Error(err, "Failed to remove finalizer for fdeployment")
 				return ctrl.Result{}, err
 			}
 		}
@@ -199,27 +231,34 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// Define a new deployment
 		dep, err := r.deploymentForFDeployment(fdeployment)
 		if err != nil {
-			log.Error(err, "Failed to define new Deployment resource for fdeployment")
+			flog.Info(err, "Failed to define new Deployment resource for fdeployment")
+			// log.Error(err, "Failed to define new Deployment resource for fdeployment")
 
 			// The following implementation will update the status
 			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
 				Status: metav1.ConditionFalse, Reason: "Reconciling",
 				Message: fmt.Sprintf("Failed to create Deployment for the custom resource (%s): (%s)", fdeployment.Name, err)})
 
-			if err := r.Status().Update(ctx, fdeployment); err != nil {
-				log.Error(err, "Failed to update fdeployment status")
+			flog.Info("Update 5 before")
+			err := r.Status().Update(ctx, fdeployment)
+			flog.Info("Update 5 after")
+
+			if err != nil {
+				flog.Info(err, "Failed to update fdeployment status 3")
+				// log.Error(err, "Failed to update fdeployment status")
 				return ctrl.Result{}, err
 			}
 
 			return ctrl.Result{}, err
 		}
-
-		log.Info("Creating a new Deployment",
-			"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+		flog.Info("Creating a new Deployment")
+		// log.Info("Creating a new Deployment",
+		// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 
 		if err = r.Create(ctx, dep); err != nil {
-			log.Error(err, "Failed to create new Deployment",
-				"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+			flog.Info(err, "Failed to create new Deployment")
+			// log.Error(err, "Failed to create new Deployment",
+			// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 			return ctrl.Result{}, err
 		}
 
@@ -228,7 +267,8 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// and move forward for the next operations
 		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	} else if err != nil {
-		log.Error(err, "Failed to get Deployment")
+		// log.Error(err, "Failed to get Deployment")
+		flog.Info(err, "Failed to get Deployment")
 		// Let's return the error for the reconciliation be re-trigged again
 		return ctrl.Result{}, err
 	}
@@ -236,17 +276,27 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	size := fdeployment.Spec.Replicas
 	found.Spec.Replicas = &size
 
-	if err = r.Update(ctx, found); err != nil {
-		log.Error(err, "Failed to update Deployment",
-			"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
+	flog.Info("Update 6 before (Always (Replicas))")
+	err = r.Update(ctx, found)
+	flog.Info("Update 6 after (Always (Replicas))")
+	if err != nil {
+		// spew.Dump(found)
+		flog.Info(err, "Failed to update Deployment (6)")
+		// log.Error(err, "Failed to update Deployment",
+		// 	"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
 
 		// The following implementation will update the status
 		meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
 			Status: metav1.ConditionFalse, Reason: "Resizing",
 			Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdeployment.Name, err)})
 
-		if err := r.Status().Update(ctx, fdeployment); err != nil {
-			log.Error(err, "Failed to update FDeployment status")
+		flog.Info("Update 7 before")
+		err := r.Status().Update(ctx, fdeployment)
+		flog.Info("Update 7 after")
+
+		if err != nil {
+			flog.Info(err, "Failed to update FDeployment status 4")
+			// log.Error(err, "Failed to update FDeployment status")
 			return ctrl.Result{}, err
 		}
 
@@ -258,23 +308,34 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		Status: metav1.ConditionTrue, Reason: "Reconciling",
 		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", fdeployment.Name, size)})
 
-	if err := r.Status().Update(ctx, fdeployment); err != nil {
-		log.Error(err, "Failed to update FDeployment status")
+	flog.Info("Update 8 before (Always (end))")
+	err = r.Status().Update(ctx, fdeployment)
+	flog.Info("Update 8 after (Always (end))")
+
+	if err != nil {
+		flog.Info(err, "Failed to update FDeployment status 5")
+		// log.Error(err, "Failed to update FDeployment status")
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (r *FdeploymentReconciler) setStatusToUnknown(ctx context.Context, fdeployment *k8sv1.Fdeployment, req reconcile.Request, log logr.Logger) error {
-	if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
-		log.Error(err, "Failed to re-fetch fdeployment")
-		return err
-	}
-	spew.Dump(fdeployment)
+func (r *FdeploymentReconciler) setStatusToUnknown(ctx context.Context, fdeployment *k8sv1.Fdeployment, req reconcile.Request, log logr.Logger, flog utils.Log) error {
+	// if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
+	// 	flog.Info(err, "Failed to re-fetch fdeployment")
+	// 	// log.Error(err, "Failed to re-fetch fdeployment")
+	// 	return err
+	// }
+	// spew.Dump(fdeployment)
 	meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment, Status: metav1.ConditionUnknown, Reason: "Reconciling", Message: "Starting reconciliation"})
-	if err := r.Status().Update(ctx, fdeployment); err != nil {
-		log.Error(err, "Failed to update fdeployment status")
+
+	flog.Info("Update 8 before")
+	err := r.Status().Update(ctx, fdeployment)
+	flog.Info("Update 8 after")
+	if err != nil {
+		flog.Info(err, "Failed to update fdeployment status 6")
+		// log.Error(err, "Failed to update fdeployment status")
 		return err
 	}
 
@@ -283,10 +344,11 @@ func (r *FdeploymentReconciler) setStatusToUnknown(ctx context.Context, fdeploym
 	// raise the issue "the object has been modified, please apply
 	// your changes to the latest version and try again" which would re-trigger the reconciliation
 	// if we try to update it again in the following operations
-	if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
-		log.Error(err, "Failed to re-fetch fdeployment")
-		return err
-	}
+	// if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
+	// 	flog.Info(err, "Failed to re-fetch fdeployment")
+	// 	// log.Error(err, "Failed to re-fetch fdeployment")
+	// 	return err
+	// }
 	return nil
 }
 
@@ -304,15 +366,15 @@ func (r *FdeploymentReconciler) doFinalizerOperationsForFDeployment(cr *k8sv1.Fd
 	// More info: https://kubernetes.io/docs/tasks/administer-cluster/use-cascading-deletion/
 
 	// The following implementation will raise an event
-	fmt.Println("-----Deleting the Custom Resource")
-	fmt.Println(cr.Name)
-	fmt.Println(cr.Namespace)
-	fmt.Println(r.Recorder)
+	// flog.Info("-----Deleting the Custom Resource")
+	// flog.Info(cr.Name)
+	// flog.Info(cr.Namespace)
+	// flog.Info(r.Recorder)
 	r.Recorder.Event(cr, "Warning", "Deleting",
 		fmt.Sprintf("Custom Resource %s is being deleted from the namespace %s",
 			cr.Name,
 			cr.Namespace))
-	fmt.Println("-----Deleting the Custom Resource2")
+	// flog.Info("-----Deleting the Custom Resource2")
 }
 
 // deploymentForFDeployment returns a FDeployment Deployment object
@@ -350,24 +412,45 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
 					},
+					// add toleration for kubernetes.azure.com/scalesetpriority spot
+					Tolerations: []corev1.Toleration{{
+						Key:      "kubernetes.azure.com/scalesetpriority",
+						Operator: corev1.TolerationOpEqual,
+						Value:    "spot",
+						// schedule on all nodes
+						Effect: corev1.TaintEffectNoSchedule,
+					}},
+
 					Containers: []corev1.Container{{
-						Image:           image,
-						Name:            "fdeployment",
-						ImagePullPolicy: corev1.PullIfNotPresent,
+						Image: image,
+						Name:  name,
+						// resources
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								"cpu":    resource.MustParse(fdeployment.Spec.Resources.Requests.CPU),
+								"memory": resource.MustParse(fdeployment.Spec.Resources.Requests.Memory),
+							},
+							Limits: corev1.ResourceList{
+								"cpu":    resource.MustParse(fdeployment.Spec.Resources.Limits.CPU),
+								"memory": resource.MustParse(fdeployment.Spec.Resources.Limits.Memory),
+							},
+						},
+
+						// ImagePullPolicy: corev1.PullIfNotPresent,
 						// Ensure restrictive context for the container
 						// More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
 						SecurityContext: &corev1.SecurityContext{
-							// WARNING: Ensure that the image used defines an UserID in the Dockerfile
-							// otherwise the Pod will not run and will fail with "container has runAsNonRoot and image has non-numeric user"".
-							// If you want your workloads admitted in namespaces enforced with the restricted mode in OpenShift/OKD vendors
-							// then, you MUST ensure that the Dockerfile defines a User ID OR you MUST leave the "RunAsNonRoot" and
-							// "RunAsUser" fields empty.
+							// 	// WARNING: Ensure that the image used defines an UserID in the Dockerfile
+							// 	// otherwise the Pod will not run and will fail with "container has runAsNonRoot and image has non-numeric user"".
+							// 	// If you want your workloads admitted in namespaces enforced with the restricted mode in OpenShift/OKD vendors
+							// 	// then, you MUST ensure that the Dockerfile defines a User ID OR you MUST leave the "RunAsNonRoot" and
+							// 	// "RunAsUser" fields empty.
 							RunAsNonRoot: &[]bool{true}[0],
-							// The memcached image does not use a non-zero numeric user as the default user.
-							// Due to RunAsNonRoot field being set to true, we need to force the user in the
-							// container to a non-zero numeric user. We do this using the RunAsUser field.
-							// However, if you are looking to provide solution for K8s vendors like OpenShift
-							// be aware that you cannot run under its restricted-v2 SCC if you set this value.
+							// 	// The memcached image does not use a non-zero numeric user as the default user.
+							// 	// Due to RunAsNonRoot field being set to true, we need to force the user in the
+							// 	// container to a non-zero numeric user. We do this using the RunAsUser field.
+							// 	// However, if you are looking to provide solution for K8s vendors like OpenShift
+							// 	// be aware that you cannot run under its restricted-v2 SCC if you set this value.
 							RunAsUser:                &[]int64{1001}[0],
 							AllowPrivilegeEscalation: &[]bool{false}[0],
 							Capabilities: &corev1.Capabilities{

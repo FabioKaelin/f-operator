@@ -40,6 +40,21 @@ type FdeploymentSpec struct {
 
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	Port int32 `json:"port,omitempty"`
+
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	Resources FdeploymentResources `json:"resources,omitempty"`
+}
+
+type FdeploymentResources struct {
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	Requests Resource `json:"requests,omitempty"`
+	Limits   Resource `json:"limits,omitempty"`
+}
+
+type Resource struct {
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	CPU    string `json:"cpu,omitempty"`
+	Memory string `json:"memory,omitempty"`
 }
 
 // FdeploymentStatus defines the observed state of Fdeployment

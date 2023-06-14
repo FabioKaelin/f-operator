@@ -6,3 +6,10 @@ spec:
   path: "/"
   replicas: 1
   port: 8080
+  resources:
+    requests: # minimum (ensured)
+      memory: "128Mi"
+      cpu: "50m"
+    limits: # maximum (allowed)
+      memory: "1024Mi"
+      cpu: "200m"

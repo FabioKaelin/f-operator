@@ -44,6 +44,23 @@ spec:
                 maximum: 5
                 minimum: 1
                 type: integer
+              resources:
+                properties:
+                  limits:
+                    properties:
+                      cpu:
+                        type: string
+                      memory:
+                        type: string
+                    type: object
+                  requests:
+                    properties:
+                      cpu:
+                        type: string
+                      memory:
+                        type: string
+                    type: object
+                type: object
             type: object
           status:
             description: FdeploymentStatus defines the observed state of Fdeployment
