@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -464,6 +465,32 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 					Containers: []corev1.Container{{
 						Image: image,
 						Name:  name,
+						ReadinessProbe: &corev1.Probe{
+							FailureThreshold: 3,
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{
+									Path:   fdeployment.Spec.HealthCheck.ReadinessProbe.Path,
+									Port:   intstr.FromInt(int(port)),
+									Scheme: corev1.URISchemeHTTP,
+								},
+							},
+							PeriodSeconds:    10,
+							SuccessThreshold: 1,
+							TimeoutSeconds:   1,
+						},
+						LivenessProbe: &corev1.Probe{
+							FailureThreshold: 3,
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{
+									Path:   fdeployment.Spec.HealthCheck.LivenessProbe.Path,
+									Port:   intstr.FromInt(int(port)),
+									Scheme: corev1.URISchemeHTTP,
+								},
+							},
+							PeriodSeconds:    10,
+							SuccessThreshold: 1,
+							TimeoutSeconds:   1,
+						},
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
 								"cpu":    resource.MustParse(fdeployment.Spec.Resources.Requests.CPU),

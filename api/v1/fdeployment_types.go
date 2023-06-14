@@ -41,6 +41,17 @@ type FdeploymentSpec struct {
 	Tag string `json:"tag,omitempty"`
 
 	Resources FdeploymentResources `json:"resources"`
+
+	HealthCheck FdeploymentHealthCheck `json:"healthCheck"`
+}
+
+type FdeploymentHealthCheck struct {
+	LivenessProbe  HealthProbe `json:"livenessProbe"`
+	ReadinessProbe HealthProbe `json:"readinessProbe"`
+}
+
+type HealthProbe struct {
+	Path string `json:"path"`
 }
 
 type FdeploymentResources struct {

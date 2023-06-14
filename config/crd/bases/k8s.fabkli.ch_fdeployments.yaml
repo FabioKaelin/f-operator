@@ -34,6 +34,26 @@ spec:
           spec:
             description: FdeploymentSpec defines the desired state of Fdeployment
             properties:
+              healthCheck:
+                properties:
+                  livenessProbe:
+                    properties:
+                      path:
+                        type: string
+                    required:
+                    - path
+                    type: object
+                  readinessProbe:
+                    properties:
+                      path:
+                        type: string
+                    required:
+                    - path
+                    type: object
+                required:
+                - livenessProbe
+                - readinessProbe
+                type: object
               path:
                 type: string
               port:
@@ -73,6 +93,7 @@ spec:
               tag:
                 type: string
             required:
+            - healthCheck
             - port
             - resources
             type: object
