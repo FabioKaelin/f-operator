@@ -28,33 +28,30 @@ type FdeploymentSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	Path string `json:"path,omitempty"`
 
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=5
 	// +kubebuilder:validation:ExclusiveMaximum=false
 
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	Replicas int32 `json:"replicas,omitempty"`
 
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	Port int32 `json:"port,omitempty"`
+	Port int32 `json:"port"`
 
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	Resources FdeploymentResources `json:"resources,omitempty"`
+	Tag string `json:"tag,omitempty"`
+
+	Resources FdeploymentResources `json:"resources"`
 }
 
 type FdeploymentResources struct {
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	Requests Resource `json:"requests,omitempty"`
-	Limits   Resource `json:"limits,omitempty"`
+	Requests Resource `json:"requests"`
+
+	Limits Resource `json:"limits"`
 }
 
 type Resource struct {
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	CPU    string `json:"cpu,omitempty"`
-	Memory string `json:"memory,omitempty"`
+	CPU    string `json:"cpu"`
+	Memory string `json:"memory"`
 }
 
 // FdeploymentStatus defines the observed state of Fdeployment

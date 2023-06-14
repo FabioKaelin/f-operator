@@ -49,18 +49,35 @@ spec:
                   limits:
                     properties:
                       cpu:
+                        default: 50m
                         type: string
                       memory:
+                        default: 128Mi
                         type: string
+                    required:
+                    - cpu
+                    - memory
                     type: object
                   requests:
                     properties:
                       cpu:
+                        default: 50m
                         type: string
                       memory:
+                        default: 128Mi
                         type: string
+                    required:
+                    - cpu
+                    - memory
                     type: object
+                required:
+                - limits
+                - requests
                 type: object
+              tag:
+                type: string
+            required:
+            - port
             type: object
           status:
             description: FdeploymentStatus defines the observed state of Fdeployment
