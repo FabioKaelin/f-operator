@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -61,10 +62,6 @@ const (
 
 const fdeploymentFinalizer = "k8s.fabkli.ch/finalizer"
 
-//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/finalizers,verbs=update
-
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
@@ -74,6 +71,14 @@ const fdeploymentFinalizer = "k8s.fabkli.ch/finalizer"
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
+
+// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
+
 func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	r.Recorder = record.NewFakeRecorder(100)
@@ -188,8 +193,8 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Check if the deployment already exists, if not create a new one
 	found := &appsv1.Deployment{}
+
 	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, found)
-	fmt.Println("-------------------", err)
 	if err != nil && apierrors.IsNotFound(err) {
 		// Define a new deployment
 		dep, err := r.deploymentForFDeployment(fdeployment)
@@ -211,11 +216,12 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 		log.Info("Creating a new Deployment",
 			"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-		// if err = r.Create(ctx, dep); err != nil {
-		// 	log.Error(err, "Failed to create new Deployment",
-		// 		"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-		// 	return ctrl.Result{}, err
-		// }
+
+		if err = r.Create(ctx, dep); err != nil {
+			log.Error(err, "Failed to create new Deployment",
+				"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+			return ctrl.Result{}, err
+		}
 
 		// Deployment created successfully
 		// We will requeue the reconciliation so that we can ensure the state
@@ -227,46 +233,23 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	// The CRD API is defining that the fdeployment type, have a fdeploymentSpec.Size field
-	// to set the quantity of Deployment instances is the desired state on the cluster.
-	// Therefore, the following code will ensure the Deployment size is the same as defined
-	// via the Size spec of the Custom Resource which we are reconciling.
 	size := fdeployment.Spec.Replicas
-	if *found.Spec.Replicas != size {
-		found.Spec.Replicas = &size
-		if err = r.Update(ctx, found); err != nil {
-			log.Error(err, "Failed to update Deployment",
-				"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
+	found.Spec.Replicas = &size
 
-			// Re-fetch the fdeployment Custom Resource before update the status
-			// so that we have the latest state of the resource on the cluster and we will avoid
-			// raise the issue "the object has been modified, please apply
-			// your changes to the latest version and try again" which would re-trigger the reconciliation
-			if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
-				log.Error(err, "Failed to re-fetch fdeployment")
-				return ctrl.Result{}, err
-			}
+	if err = r.Update(ctx, found); err != nil {
+		log.Error(err, "Failed to update Deployment",
+			"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
 
-			// The following implementation will update the status
-			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
-				Status: metav1.ConditionFalse, Reason: "Resizing",
-				Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdeployment.Name, err)})
+		// The following implementation will update the status
+		meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
+			Status: metav1.ConditionFalse, Reason: "Resizing",
+			Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdeployment.Name, err)})
 
-			if err := r.Status().Update(ctx, fdeployment); err != nil {
-				log.Error(err, "Failed to update FDeployment status")
-				return ctrl.Result{}, err
-			}
-
+		if err := r.Status().Update(ctx, fdeployment); err != nil {
+			log.Error(err, "Failed to update FDeployment status")
 			return ctrl.Result{}, err
 		}
 
-		// Now, that we update the size we want to requeue the reconciliation
-		// so that we can ensure that we have the latest state of the resource before
-		// update. Also, it will help ensure the desired state on the cluster
-		return ctrl.Result{Requeue: true}, nil
-	}
-	if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
-		log.Error(err, "Failed to re-fetch fdeployment")
 		return ctrl.Result{}, err
 	}
 
@@ -335,13 +318,11 @@ func (r *FdeploymentReconciler) doFinalizerOperationsForFDeployment(cr *k8sv1.Fd
 // deploymentForFDeployment returns a FDeployment Deployment object
 func (r *FdeploymentReconciler) deploymentForFDeployment(
 	fdeployment *k8sv1.Fdeployment) (*appsv1.Deployment, error) {
-	component := fdeployment.Spec.Component
-	app := fdeployment.Spec.App
 	// path := fdeployment.Spec.Path
 	replicas := fdeployment.Spec.Replicas
 	port := fdeployment.Spec.Port
-	name := fmt.Sprintf("%s-%s", app, component)
-	image := fmt.Sprintf("ghcr.io/fabiokaelin/%s-%s", app, component)
+	name := fdeployment.Name
+	image := fmt.Sprintf("ghcr.io/fabiokaelin/%s", fdeployment.Name)
 	ls := labelsForFDeployment(fdeployment.Name, image)
 
 	dep := &appsv1.Deployment{
@@ -360,34 +341,6 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
-					// TODO(user): Uncomment the following code to configure the nodeAffinity expression
-					// according to the platforms which are supported by your solution. It is considered
-					// best practice to support multiple architectures. build your manager image using the
-					// makefile target docker-buildx. Also, you can use docker manifest inspect <image>
-					// to check what are the platforms supported.
-					// More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#node-affinity
-					//Affinity: &corev1.Affinity{
-					//	NodeAffinity: &corev1.NodeAffinity{
-					//		RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-					//			NodeSelectorTerms: []corev1.NodeSelectorTerm{
-					//				{
-					//					MatchExpressions: []corev1.NodeSelectorRequirement{
-					//						{
-					//							Key:      "kubernetes.io/arch",
-					//							Operator: "In",
-					//							Values:   []string{"amd64", "arm64", "ppc64le", "s390x"},
-					//						},
-					//						{
-					//							Key:      "kubernetes.io/os",
-					//							Operator: "In",
-					//							Values:   []string{"linux"},
-					//						},
-					//					},
-					//				},
-					//			},
-					//		},
-					//	},
-					//},
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: &[]bool{true}[0],
 						// IMPORTANT: seccomProfile was introduced with Kubernetes 1.19
@@ -459,5 +412,7 @@ func labelsForFDeployment(name string, image string) map[string]string {
 func (r *FdeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&k8sv1.Fdeployment{}).
+		Owns(&appsv1.Deployment{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
 		Complete(r)
 }

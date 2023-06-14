@@ -29,13 +29,11 @@ type FdeploymentSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	Component string `json:"component"`
-
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	App string `json:"app"`
-
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	Path string `json:"path,omitempty"`
+
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=5
+	// +kubebuilder:validation:ExclusiveMaximum=false
 
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	Replicas int32 `json:"replicas,omitempty"`
@@ -49,14 +47,23 @@ type FdeploymentStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// Represents the observations of a Fdeployment's current state.
+	// Fdeployment.status.conditions.type are: "Available", "Progressing", and "Degraded"
+	// Fdeployment.status.conditions.status are one of True, False, Unknown.
+	// Fdeployment.status.conditions.reason the value should be a CamelCase string and producers of specific
+	// condition types may define expected values and meanings for this field, and whether the values
+	// are considered a guaranteed API.
+	// Fdeployment.status.conditions.Message is a human readable message indicating details about the transition.
+	// For further information see: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
 // Fdeployment is the Schema for the fdeployments API
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 type Fdeployment struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

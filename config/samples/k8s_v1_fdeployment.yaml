@@ -1,10 +1,8 @@
 apiVersion: k8s.fabkli.ch/v1
 kind: Fdeployment
 metadata:
-  name: fdeployment-sample
+  name: testapplication-backend
 spec:
-  component: main
-  app: testapplication
-  path: "/api"
-  replicas: 2
-  port: 8000
+  path: "/"
+  replicas: 1
+  port: 8080

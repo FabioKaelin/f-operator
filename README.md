@@ -2,6 +2,14 @@
 
 // TODO(user): Add simple overview of use/purpose
 
+## Notes
+
+### Testing
+
+For add CRD run `make install`
+
+For run Controller locally for testing run `make run`
+
 ## Description
 
 // TODO(user): An in-depth paragraph about your project and overview of use
