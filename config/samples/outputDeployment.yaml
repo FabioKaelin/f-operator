@@ -4,7 +4,7 @@ metadata:
   annotations:
     deployment.kubernetes.io/revision: "1"
   creationTimestamp: "2023-06-14T13:34:49Z"
-  generation: 1
+  generation: 2
   name: testapplication-backend
   namespace: ivp-foperator
   ownerReferences:
@@ -14,11 +14,11 @@ metadata:
     kind: Fdeployment
     name: testapplication-backend
     uid: 22fc23a5-d2ef-441d-a358-6b7b4777f371
-  resourceVersion: "4179404"
+  resourceVersion: "4181760"
   uid: f2986aa5-b53c-4ed5-9dec-103afeab6b4b
 spec:
   progressDeadlineSeconds: 600
-  replicas: 2
+  replicas: 1
   revisionHistoryLimit: 10
   selector:
     matchLabels:
@@ -75,20 +75,21 @@ spec:
         operator: Equal
         value: spot
 status:
+  availableReplicas: 1
   conditions:
-  - lastTransitionTime: "2023-06-14T13:34:49Z"
-    lastUpdateTime: "2023-06-14T13:34:49Z"
-    message: Deployment does not have minimum availability.
-    reason: MinimumReplicasUnavailable
-    status: "False"
+  - lastTransitionTime: "2023-06-14T13:36:22Z"
+    lastUpdateTime: "2023-06-14T13:36:22Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
     type: Available
   - lastTransitionTime: "2023-06-14T13:34:49Z"
-    lastUpdateTime: "2023-06-14T13:34:49Z"
-    message: ReplicaSet "testapplication-backend-69c88c89ff" is progressing.
-    reason: ReplicaSetUpdated
+    lastUpdateTime: "2023-06-14T13:36:22Z"
+    message: ReplicaSet "testapplication-backend-69c88c89ff" has successfully progressed.
+    reason: NewReplicaSetAvailable
     status: "True"
     type: Progressing
-  observedGeneration: 1
-  replicas: 2
-  unavailableReplicas: 2
-  updatedReplicas: 2
+  observedGeneration: 2
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1
