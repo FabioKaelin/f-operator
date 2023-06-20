@@ -671,6 +671,7 @@ func (r *FdeploymentReconciler) ingressForFDeployment(
 	// ls := labelsForFDeployment(fdeployment.Name, image)
 
 	// ingress networking.k8s.io/v1
+	pathType := networking.PathTypePrefix
 	ing := &networking.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -682,7 +683,8 @@ func (r *FdeploymentReconciler) ingressForFDeployment(
 				IngressRuleValue: networking.IngressRuleValue{
 					HTTP: &networking.HTTPIngressRuleValue{
 						Paths: []networking.HTTPIngressPath{{
-							Path: path,
+							Path:     path,
+							PathType: &pathType,
 							Backend: networking.IngressBackend{
 								Service: &networking.IngressServiceBackend{
 									Name: name,
@@ -745,7 +747,10 @@ func labelsForFDeployment(name string, image string) map[string]string {
 func (r *FdeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&k8sv1.Fdeployment{}).
+		Owns(&corev1.ServiceAccount{}).
+		Owns(&corev1.Service{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&networking.Ingress{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
 		Complete(r)
 }
