@@ -89,6 +89,7 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	flog := utils.Init()
 	r.Recorder = record.NewFakeRecorder(100)
 	fdeployment := &k8sv1.Fdeployment{}
+	flog.Info("req.NamespacedName", req.NamespacedName)
 	err := r.Get(ctx, req.NamespacedName, fdeployment)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
