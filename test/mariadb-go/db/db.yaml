@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mariadb-pv-claim-1
+  labels:
+    app: mariadb
+spec:
+  # storageClassName: managed-csi
+  storageClassName: ivp-foperator-file-temp-standard
+  accessModes:
+    - ReadWriteMany
+    # - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-internal-service
+spec:
+  selector:
+    app: mariadb
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb-deployment
+spec: # specification for deployment resource
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template: # blueprint for Pod
+    metadata:
+      labels:
+        app: mariadb # service will look for this label
+    spec: # specification for Pod
+      containers:
+      - name: mariadb
+        image: mariadb
+        ports:
+        - containerPort: 3306 #default one
+        env:
+        - name: MARIADB_ROOT_PASSWORD
+          value: mypassword
+        - name: MARIADB_DATABASE
+          value: testdb
+        # - name: MARIADB_ROOT_PASSWORD
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: mariadb-secret
+        #       key: mariadb-root-password
+
+        resources:
+          requests: # minimum (ensured)
+            memory: "128Mi"
+            cpu: "50m"
+          limits: # maximum (allowed)
+            memory: "1024Mi"
+            cpu: "200m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+
+        volumeMounts:
+        - name: mariadb-pv
+          mountPath: /var/lib/mysql
+          readOnly: false
+          mountPropagation: None
+          # mountPropagation: HostToContainer
+          subPath: mariadb
+
+        # command: ["sh", "-c", "ls -la /var/lib/mysql"]
+      volumes:
+      - name: mariadb-pv
+        persistentVolumeClaim:
+          claimName: mariadb-pv-claim-1
+
+      tolerations:
+      - effect: NoSchedule
+        key: kubernetes.azure.com/scalesetpriority
+        operator: Equal
+        value: spot
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 2000
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault

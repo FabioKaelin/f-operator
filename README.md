@@ -6,9 +6,9 @@
 
 ### Testing
 
-For add CRD run `make install`
+To update the code and the CRD after updating the API run  `make generate manifests`
 
-For run Controller locally for testing run `make run`
+To add the CRD and run the Controller localy run  `make install run`
 
 ## Description
 
