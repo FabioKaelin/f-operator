@@ -20,3 +20,9 @@ spec:
     readinessProbe:
       path: "/"
   host: "testapplication.fabkli.ch"
+  database: "testapplication"
+  env:
+    - name: TEST_ENV_1
+      value: test-value
+    - name: DB_PASSWORD
+      secretRef: testapplication-db-password

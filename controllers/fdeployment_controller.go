@@ -408,8 +408,8 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	size := fdeployment.Spec.Replicas
-	foundDeployment.Spec.Replicas = &size
+	replicas := fdeployment.Spec.Replicas
+	foundDeployment.Spec.Replicas = &replicas
 
 	flog.Info("Update 6 before (Always (Replicas))")
 	err = r.Update(ctx, foundDeployment)
@@ -441,7 +441,7 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// The following implementation will update the status
 	meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
 		Status: metav1.ConditionTrue, Reason: "Reconciling",
-		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", fdeployment.Name, size)})
+		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", fdeployment.Name, replicas)})
 
 	flog.Info("Update 8 before (Always (end))")
 	err = r.Status().Update(ctx, fdeployment)
