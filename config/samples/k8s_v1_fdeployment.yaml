@@ -25,4 +25,5 @@ spec:
     - name: TEST_ENV_1
       value: test-value
     - name: DB_PASSWORD
-      secretRef: testapplication-db-password
+      database: "testapplication"
+      # secretRef: testapplication-db-password
