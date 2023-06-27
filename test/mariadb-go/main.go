@@ -4,7 +4,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 
 	"github.com/davecgh/go-spew/spew"
@@ -92,14 +91,14 @@ func main() {
 
 			// log
 			asdfs = append(asdfs, asdf{Id: id, Name: name})
-			fmt.Println(id, name)
-			fmt.Println("aaaa")
-			spew.Dump(asdfs)
-			fmt.Println("bbbb")
-			spew.Dump(asdf{Id: id, Name: name})
-			fmt.Println("....")
+			// fmt.Println(id, name)
+			// fmt.Println("aaaa")
+			// spew.Dump(asdfs)
+			// fmt.Println("bbbb")
+			// spew.Dump(asdf{Id: id, Name: name})
+			// fmt.Println("....")
 		}
-		fmt.Println("--------------")
+		// fmt.Println("--------------")
 		spew.Dump(asdfs)
 		c.IndentedJSON(http.StatusOK, asdfs)
 	})
