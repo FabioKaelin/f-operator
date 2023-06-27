@@ -60,13 +60,13 @@ spec: # specification for deployment resource
         env:
         - name: MARIADB_DATABASE
           value: testdb
-        # - name: MARIADB_ROOT_PASSWORD
-        #   value: mypassword
         - name: MARIADB_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mariadb-secret
-              key: password
+          value: mypassword
+        # - name: MARIADB_ROOT_PASSWORD
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: mariadb-secret
+        #       key: password
 
         resources:
           requests: # minimum (ensured)
