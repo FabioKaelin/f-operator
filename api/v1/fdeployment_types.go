@@ -45,6 +45,8 @@ type FdeploymentSpec struct {
 	Resources FdeploymentResources `json:"resources"`
 
 	HealthCheck FdeploymentHealthCheck `json:"healthCheck"`
+
+	Environments []Environment `json:"env"`
 }
 
 type FdeploymentHealthCheck struct {
@@ -65,6 +67,18 @@ type FdeploymentResources struct {
 type Resource struct {
 	CPU    string `json:"cpu"`
 	Memory string `json:"memory"`
+}
+
+type Environment struct {
+	Name       string        `json:"name"`
+	Value      string        `json:"value,omitempty"`
+	FromConfig FromReference `json:"fromConfig,omitempty"`
+	FromSecret FromReference `json:"fromSecret,omitempty"`
+}
+
+type FromReference struct {
+	Name string `json:"name"` // name of the configmap
+	Key  string `json:"key"`  // key of the configmap
 }
 
 // FdeploymentStatus defines the observed state of Fdeployment

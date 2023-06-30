@@ -34,6 +34,37 @@ spec:
           spec:
             description: FdeploymentSpec defines the desired state of Fdeployment
             properties:
+              env:
+                items:
+                  properties:
+                    fromConfig:
+                      properties:
+                        key:
+                          type: string
+                        name:
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    fromSecret:
+                      properties:
+                        key:
+                          type: string
+                        name:
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    name:
+                      type: string
+                    value:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               healthCheck:
                 properties:
                   livenessProbe:
@@ -95,6 +126,7 @@ spec:
               tag:
                 type: string
             required:
+            - env
             - healthCheck
             - host
             - path
