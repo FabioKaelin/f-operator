@@ -522,6 +522,49 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 	image := fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
 	ls := labelsForFDeployment(fdeployment.Name, image)
 
+	// create env vars
+	envVars := []corev1.EnvVar{}
+	for _, env := range fdeployment.Spec.Environments {
+		var currentEnv corev1.EnvVar
+		if env.Value != "" {
+			currentEnv = corev1.EnvVar{
+				Name:  env.Name,
+				Value: env.Value,
+			}
+		} else if env.FromConfig.Name != "" && env.FromConfig.Key != "" {
+			currentEnv = corev1.EnvVar{
+				Name: env.Name,
+				ValueFrom: &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: env.FromConfig.Name,
+						},
+						Key: env.FromConfig.Key,
+					},
+				},
+			}
+		} else if env.FromSecret.Name != "" && env.FromSecret.Key != "" {
+			currentEnv = corev1.EnvVar{
+				Name: env.Name,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: env.FromSecret.Name,
+						},
+						Key: env.FromSecret.Key,
+					},
+				},
+			}
+		} else {
+			return nil, fmt.Errorf("invalid environment variable %s", env.Name)
+		}
+		envVars = append(envVars, currentEnv)
+	}
+	// valueFrom:
+	//   configMapKeyRef:
+	// 	name: game-demo           # The ConfigMap this value comes from.
+	// 	key: player_initial_lives # The key to fetch.
+
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -558,6 +601,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 					Containers: []corev1.Container{{
 						Image: image,
 						Name:  name,
+						Env:   envVars,
 						ReadinessProbe: &corev1.Probe{
 							FailureThreshold: 3,
 							ProbeHandler: corev1.ProbeHandler{
