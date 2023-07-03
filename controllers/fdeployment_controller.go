@@ -408,8 +408,33 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	replicas := fdeployment.Spec.Replicas
-	foundDeployment.Spec.Replicas = &replicas
+	foundDeployment.Spec.Replicas = &fdeployment.Spec.Replicas
+	foundDeployment.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort = fdeployment.Spec.Port
+	foundDeployment.Spec.Template.Spec.Containers[0].Image = fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
+	foundDeployment.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Port = intstr.FromInt(int(fdeployment.Spec.Port))
+	foundDeployment.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Path = fdeployment.Spec.HealthCheck.ReadinessProbe.Path
+	foundDeployment.Spec.Template.Spec.Containers[0].LivenessProbe.HTTPGet.Port = intstr.FromInt(int(fdeployment.Spec.Port))
+	foundDeployment.Spec.Template.Spec.Containers[0].LivenessProbe.HTTPGet.Path = fdeployment.Spec.HealthCheck.LivenessProbe.Path
+	foundService.Spec.Ports[0].Port = fdeployment.Spec.Port
+	foundIngress.Spec.Rules[0].Host = fdeployment.Spec.Host
+	foundIngress.Spec.Rules[0].HTTP.Paths[0].Path = fdeployment.Spec.Path
+	// resource limits and request
+	limitCpu := resource.MustParse(fdeployment.Spec.Resources.Limits.CPU)
+	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().Set(limitCpu.Value())
+	limitMemory := resource.MustParse(fdeployment.Spec.Resources.Limits.Memory)
+	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().Set(limitMemory.Value())
+	requestCpu := resource.MustParse(fdeployment.Spec.Resources.Requests.CPU)
+	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Requests.Cpu().Set(requestCpu.Value())
+	requestMemory := resource.MustParse(fdeployment.Spec.Resources.Requests.Memory)
+	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Requests.Memory().Set(requestMemory.Value())
+
+	// update env
+	env, err := getEnvironment(fdeployment)
+	if err != nil {
+		flog.Info(err, "Failed to get environment")
+		return ctrl.Result{}, err
+	}
+	foundDeployment.Spec.Template.Spec.Containers[0].Env = env
 
 	flog.Info("Update 6 before (Always (Replicas))")
 	err = r.Update(ctx, foundDeployment)
@@ -441,7 +466,7 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// The following implementation will update the status
 	meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
 		Status: metav1.ConditionTrue, Reason: "Reconciling",
-		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", fdeployment.Name, replicas)})
+		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", fdeployment.Name, fdeployment.Spec.Replicas)})
 
 	flog.Info("Update 8 before (Always (end))")
 	err = r.Status().Update(ctx, fdeployment)
@@ -512,17 +537,7 @@ func (r *FdeploymentReconciler) doFinalizerOperationsForFDeployment(cr *k8sv1.Fd
 	// flog.Info("-----Deleting the Custom Resource2")
 }
 
-// deploymentForFDeployment returns a FDeployment Deployment object
-func (r *FdeploymentReconciler) deploymentForFDeployment(
-	fdeployment *k8sv1.Fdeployment) (*appsv1.Deployment, error) {
-	// path := fdeployment.Spec.Path
-	replicas := fdeployment.Spec.Replicas
-	port := fdeployment.Spec.Port
-	name := fdeployment.Name
-	image := fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
-	ls := labelsForFDeployment(fdeployment.Name, image)
-
-	// create env vars
+func getEnvironment(fdeployment *k8sv1.Fdeployment) ([]corev1.EnvVar, error) {
 	envVars := []corev1.EnvVar{}
 	for _, env := range fdeployment.Spec.Environments {
 		var currentEnv corev1.EnvVar
@@ -560,6 +575,24 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 		}
 		envVars = append(envVars, currentEnv)
 	}
+	return envVars, nil
+}
+
+// deploymentForFDeployment returns a FDeployment Deployment object
+func (r *FdeploymentReconciler) deploymentForFDeployment(
+	fdeployment *k8sv1.Fdeployment) (*appsv1.Deployment, error) {
+	// path := fdeployment.Spec.Path
+	replicas := fdeployment.Spec.Replicas
+	port := fdeployment.Spec.Port
+	name := fdeployment.Name
+	image := fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
+	ls := labelsForFDeployment(fdeployment.Name, image)
+
+	// create env vars
+	envVars, err := getEnvironment(fdeployment)
+	if err != nil {
+		return nil, err
+	}
 	// valueFrom:
 	//   configMapKeyRef:
 	// 	name: game-demo           # The ConfigMap this value comes from.
@@ -596,6 +629,9 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 						Operator: corev1.TolerationOpEqual,
 						Value:    "spot",
 						Effect:   corev1.TaintEffectNoSchedule,
+					}},
+					ImagePullSecrets: []corev1.LocalObjectReference{{
+						Name: "regcred",
 					}},
 
 					Containers: []corev1.Container{{
