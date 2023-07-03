@@ -6,7 +6,9 @@ metadata:
     app: mariadb
 spec:
   # storageClassName: managed-csi
-  storageClassName: ivp-foperator-file-temp-standard
+  storageClassName: standard
+  # storageClassName: default
+  # storageClassName: ivp-foperator-file-temp-standard
   accessModes:
     - ReadWriteMany
     # - ReadWriteOnce
@@ -28,6 +30,14 @@ spec:
       targetPort: 3306
   clusterIP: None
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadb-secret
+type: Opaque
+data:
+  password: bXlzZWNyZXRwYXNzd29yZA== #  echo -n 'mysecretpassword' | base64
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -48,15 +58,15 @@ spec: # specification for deployment resource
         ports:
         - containerPort: 3306 #default one
         env:
-        - name: MARIADB_ROOT_PASSWORD
-          value: mypassword
         - name: MARIADB_DATABASE
           value: testdb
+        - name: MARIADB_ROOT_PASSWORD
+          value: mypassword
         # - name: MARIADB_ROOT_PASSWORD
         #   valueFrom:
         #     secretKeyRef:
         #       name: mariadb-secret
-        #       key: mariadb-root-password
+        #       key: password
 
         resources:
           requests: # minimum (ensured)
