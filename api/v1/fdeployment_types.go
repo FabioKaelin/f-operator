@@ -46,7 +46,7 @@ type FdeploymentSpec struct {
 
 	HealthCheck FdeploymentHealthCheck `json:"healthCheck"`
 
-	Environments []Environment `json:"env"`
+	Environments []Environment `json:"env,omitempty"`
 }
 
 type FdeploymentHealthCheck struct {

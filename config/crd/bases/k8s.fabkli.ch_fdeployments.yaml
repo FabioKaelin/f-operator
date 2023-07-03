@@ -126,7 +126,6 @@ spec:
               tag:
                 type: string
             required:
-            - env
             - healthCheck
             - host
             - path
