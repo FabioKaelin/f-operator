@@ -15,7 +15,33 @@ spec:
     singular: fdeployment
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - description: How many replicas has this deployment
+      jsonPath: .spec.replicas
+      name: Replicas
+      type: integer
+    - description: Which host has this deployment
+      jsonPath: .spec.host
+      name: Host
+      type: string
+    - description: Which subpath has this deployment
+      jsonPath: .spec.path
+      name: Path
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - description: Which image tag is deployed
+      jsonPath: .spec.tag
+      name: Tag
+      priority: 1
+      type: string
+    - description: Which port is targeted
+      jsonPath: .spec.port
+      name: Port
+      priority: 1
+      type: integer
+    name: v1
     schema:
       openAPIV3Schema:
         properties:

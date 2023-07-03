@@ -4,10 +4,9 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
-	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -19,15 +18,18 @@ type MariaDB struct {
 }
 
 type asdf struct {
-	id   int
-	name string
+	Id   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 func Init() MariaDB {
 	// get env vars
-	dbHost := "mariadb-internal-service.ivp-foperator.svc.cluster.local"
-	dbPort := "8080"
+	dbHost := "mariadb-internal-service.test.svc.cluster.local"
+	// dbHost := "mariadb-internal-service.ivp-foperator.svc.cluster.local"
+	dbPort := "3306"
+	// dbPort := "8080"
 	dbUser := "root"
+	// dbPass := "mysecretpassword"
 	dbPass := "mypassword"
 	dbName := "testdb"
 
@@ -38,13 +40,13 @@ func Init() MariaDB {
 	}
 
 	// set max open connections
-	db.SetMaxOpenConns(100)
+	// db.SetMaxOpenConns(100)
 
 	// set max idle connections
-	db.SetMaxIdleConns(100)
+	// db.SetMaxIdleConns(100)
 
 	// set max connection lifetime
-	db.SetConnMaxLifetime(time.Minute * 5)
+	// db.SetConnMaxLifetime(time.Minute * 5)
 
 	return MariaDB{db: db}
 }
@@ -88,9 +90,16 @@ func main() {
 			}
 
 			// log
-			asdfs = append(asdfs, asdf{id: id, name: name})
-			fmt.Println(id, name)
+			asdfs = append(asdfs, asdf{Id: id, Name: name})
+			// fmt.Println(id, name)
+			// fmt.Println("aaaa")
+			// spew.Dump(asdfs)
+			// fmt.Println("bbbb")
+			// spew.Dump(asdf{Id: id, Name: name})
+			// fmt.Println("....")
 		}
+		// fmt.Println("--------------")
+		spew.Dump(asdfs)
 		c.IndentedJSON(http.StatusOK, asdfs)
 	})
 
