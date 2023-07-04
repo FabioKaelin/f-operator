@@ -415,7 +415,7 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	foundDeployment.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Path = fdeployment.Spec.HealthCheck.ReadinessProbe.Path
 	foundDeployment.Spec.Template.Spec.Containers[0].LivenessProbe.HTTPGet.Port = intstr.FromInt(int(fdeployment.Spec.Port))
 	foundDeployment.Spec.Template.Spec.Containers[0].LivenessProbe.HTTPGet.Path = fdeployment.Spec.HealthCheck.LivenessProbe.Path
-	foundService.Spec.Ports[0].Port = fdeployment.Spec.Port
+	foundService.Spec.Ports[0].TargetPort = intstr.FromInt(int(fdeployment.Spec.Port))
 	foundIngress.Spec.Rules[0].Host = fdeployment.Spec.Host
 	foundIngress.Spec.Rules[0].HTTP.Paths[0].Path = fdeployment.Spec.Path
 	// resource limits and request
@@ -436,12 +436,58 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	foundDeployment.Spec.Template.Spec.Containers[0].Env = env
 
-	flog.Info("Update 6 before (Always (Replicas))")
 	err = r.Update(ctx, foundDeployment)
-	flog.Info("Update 6 after (Always (Replicas))")
 	if err != nil {
 		// spew.Dump(found)
 		flog.Info(err, "Failed to update Deployment (6)")
+		// log.Error(err, "Failed to update Deployment",
+		// 	"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
+
+		// The following implementation will update the status
+		meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
+			Status: metav1.ConditionFalse, Reason: "Resizing",
+			Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdeployment.Name, err)})
+
+		flog.Info("Update 7 before")
+		err := r.Status().Update(ctx, fdeployment)
+		flog.Info("Update 7 after")
+
+		if err != nil {
+			flog.Info(err, "Failed to update FDeployment status 4")
+			// log.Error(err, "Failed to update FDeployment status")
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, err
+	}
+	err = r.Update(ctx, foundService)
+	if err != nil {
+		// spew.Dump(found)
+		flog.Info(err, "Failed to update Service (6)")
+		// log.Error(err, "Failed to update Deployment",
+		// 	"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
+
+		// The following implementation will update the status
+		meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
+			Status: metav1.ConditionFalse, Reason: "Resizing",
+			Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdeployment.Name, err)})
+
+		flog.Info("Update 7 before")
+		err := r.Status().Update(ctx, fdeployment)
+		flog.Info("Update 7 after")
+
+		if err != nil {
+			flog.Info(err, "Failed to update FDeployment status 4")
+			// log.Error(err, "Failed to update FDeployment status")
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, err
+	}
+	err = r.Update(ctx, foundIngress)
+	if err != nil {
+		// spew.Dump(found)
+		flog.Info(err, "Failed to update Ingress (6)")
 		// log.Error(err, "Failed to update Deployment",
 		// 	"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
 
@@ -468,9 +514,7 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		Status: metav1.ConditionTrue, Reason: "Reconciling",
 		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", fdeployment.Name, fdeployment.Spec.Replicas)})
 
-	flog.Info("Update 8 before (Always (end))")
 	err = r.Status().Update(ctx, fdeployment)
-	flog.Info("Update 8 after (Always (end))")
 
 	if err != nil {
 		flog.Info(err, "Failed to update FDeployment status 5")
