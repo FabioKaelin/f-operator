@@ -81,5 +81,5 @@ jobs:
       - name: deploy
         run: |
           make kustomize
-          make undeploy
+          make undeploy | true
           make deploy
