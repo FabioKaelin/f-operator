@@ -663,12 +663,12 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 
 					AutomountServiceAccountToken: &[]bool{false}[0],
 					ServiceAccountName:           name,
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: &[]bool{true}[0],
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
-					},
+					// SecurityContext: &corev1.PodSecurityContext{
+					// 	RunAsNonRoot: &[]bool{true}[0],
+					// 	SeccompProfile: &corev1.SeccompProfile{
+					// 		Type: corev1.SeccompProfileTypeRuntimeDefault,
+					// 	},
+					// },
 					Tolerations: []corev1.Toleration{{
 						Key:      "kubernetes.azure.com/scalesetpriority",
 						Operator: corev1.TolerationOpEqual,
@@ -721,16 +721,16 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 						},
 
 						// ImagePullPolicy: corev1.PullIfNotPresent,
-						SecurityContext: &corev1.SecurityContext{
-							RunAsNonRoot:             &[]bool{true}[0],
-							RunAsUser:                &[]int64{1001}[0],
-							AllowPrivilegeEscalation: &[]bool{false}[0],
-							Capabilities: &corev1.Capabilities{
-								Drop: []corev1.Capability{
-									"ALL",
-								},
-							},
-						},
+						// SecurityContext: &corev1.SecurityContext{
+						// 	RunAsNonRoot:             &[]bool{true}[0],
+						// 	RunAsUser:                &[]int64{1001}[0],
+						// 	AllowPrivilegeEscalation: &[]bool{false}[0],
+						// 	Capabilities: &corev1.Capabilities{
+						// 		Drop: []corev1.Capability{
+						// 			"ALL",
+						// 		},
+						// 	},
+						// },
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: port,
 							Name:          "containerport",

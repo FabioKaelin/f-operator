@@ -90,7 +90,7 @@ spec: # specification for deployment resource
           readOnly: false
           mountPropagation: None
           # mountPropagation: HostToContainer
-          subPath: mariadb
+          # subPath: mariadb
 
         # command: ["sh", "-c", "ls -la /var/lib/mysql"]
       volumes:
