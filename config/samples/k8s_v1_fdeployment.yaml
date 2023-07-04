@@ -1,12 +1,13 @@
 apiVersion: k8s.fabkli.ch/v1
 kind: Fdeployment
 metadata:
-  name: testapplication-backend
+  name: environment
+  # name: testapplication-backend
 spec:
   path: "/"
-  replicas: 1
+  replicas: 2
   port: 8080
-  tag: "1.0.0"
+  tag: "latest"
   resources:
     limits:
       cpu: 200m
@@ -19,4 +20,15 @@ spec:
       path: "/"
     readinessProbe:
       path: "/"
-  host: "testapplication.fabkli.ch"
+  host: "env.fabkli.ch"
+  env:
+    - name: FOO
+      value: foo-value
+    - name: BAR
+      fromConfig:
+        name: environment-test
+        key: BAR
+    - name: BAZ
+      fromSecret:
+        name: environment-test
+        key: BAZ

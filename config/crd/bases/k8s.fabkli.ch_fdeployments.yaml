@@ -15,7 +15,33 @@ spec:
     singular: fdeployment
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - description: How many replicas has this deployment
+      jsonPath: .spec.replicas
+      name: Replicas
+      type: integer
+    - description: Which host has this deployment
+      jsonPath: .spec.host
+      name: Host
+      type: string
+    - description: Which subpath has this deployment
+      jsonPath: .spec.path
+      name: Path
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - description: Which image tag is deployed
+      jsonPath: .spec.tag
+      name: Tag
+      priority: 1
+      type: string
+    - description: Which port is targeted
+      jsonPath: .spec.port
+      name: Port
+      priority: 1
+      type: integer
+    name: v1
     schema:
       openAPIV3Schema:
         properties:
@@ -34,6 +60,37 @@ spec:
           spec:
             description: FdeploymentSpec defines the desired state of Fdeployment
             properties:
+              env:
+                items:
+                  properties:
+                    fromConfig:
+                      properties:
+                        key:
+                          type: string
+                        name:
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    fromSecret:
+                      properties:
+                        key:
+                          type: string
+                        name:
+                          type: string
+                      required:
+                      - key
+                      - name
+                      type: object
+                    name:
+                      type: string
+                    value:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               healthCheck:
                 properties:
                   livenessProbe:

@@ -45,6 +45,8 @@ type FdeploymentSpec struct {
 	Resources FdeploymentResources `json:"resources"`
 
 	HealthCheck FdeploymentHealthCheck `json:"healthCheck"`
+
+	Environments []Environment `json:"env,omitempty"`
 }
 
 type FdeploymentHealthCheck struct {
@@ -65,6 +67,18 @@ type FdeploymentResources struct {
 type Resource struct {
 	CPU    string `json:"cpu"`
 	Memory string `json:"memory"`
+}
+
+type Environment struct {
+	Name       string        `json:"name"`
+	Value      string        `json:"value,omitempty"`
+	FromConfig FromReference `json:"fromConfig,omitempty"`
+	FromSecret FromReference `json:"fromSecret,omitempty"`
+}
+
+type FromReference struct {
+	Name string `json:"name"` // name of the configmap
+	Key  string `json:"key"`  // key of the configmap
 }
 
 // FdeploymentStatus defines the observed state of Fdeployment
@@ -89,7 +103,14 @@ type FdeploymentStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="How many replicas has this deployment"
+// +kubebuilder:printcolumn:name="Host",type="string",JSONPath=".spec.host",description="Which host has this deployment"
+// +kubebuilder:printcolumn:name="Path",type="string",JSONPath=".spec.path",description="Which subpath has this deployment"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Tag",type="string",JSONPath=".spec.tag",description="Which image tag is deployed",priority=1
+// +kubebuilder:printcolumn:name="Port",type="integer",JSONPath=".spec.port",description="Which port is targeted",priority=1
 type Fdeployment struct {
+	// TODO: Add ready to print columns (most likely from status (which also has to be done first))
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 

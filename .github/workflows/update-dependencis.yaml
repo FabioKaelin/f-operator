@@ -1,0 +1,46 @@
+name: Update dependencies
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'
+  # push:
+  #   branches:
+  #   - "develop"
+  workflow_dispatch:
+
+
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v4
+        name: Setup go
+        with:
+          go-version: '^1.20.0'
+
+      - name: Update dependencies
+        run: |
+          go version
+
+          git config --global user.name "DependenciesUpdater"
+          git config --global user.email "supermae206+dependencies@gmail.com"
+
+          git checkout main
+
+          go mod tidy
+          go get -u -v ./...
+          go mod tidy
+
+          git add --all
+          git commit -m "Update dependencies"
+          git push
