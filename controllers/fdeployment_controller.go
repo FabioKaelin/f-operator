@@ -723,6 +723,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 						// ImagePullPolicy: corev1.PullIfNotPresent,
 						SecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot: &[]bool{false}[0],
+							Privileged:   &[]bool{true}[0],
 							// 	RunAsUser:                &[]int64{1001}[0],
 							// 	AllowPrivilegeEscalation: &[]bool{false}[0],
 							// 	Capabilities: &corev1.Capabilities{
