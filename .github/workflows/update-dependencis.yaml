@@ -35,6 +35,8 @@ jobs:
           git config --global user.name "DependenciesUpdater"
           git config --global user.email "supermae206+dependencies@gmail.com"
 
+          git checkout main
+
           go mod tidy
           go get -u -v ./...
           go mod tidy
