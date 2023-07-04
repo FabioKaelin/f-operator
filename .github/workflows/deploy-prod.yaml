@@ -33,8 +33,7 @@ jobs:
 
       - name: build and push
         run: |
-          git checkout main
-          make docker-buildx
+          make docker-buildx ignore-not-found=true
 
 
       - uses: azure/setup-kubectl@v3
