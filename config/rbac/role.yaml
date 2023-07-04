@@ -17,21 +17,25 @@ rules:
   - patch
   - update
   - watch
+
 - apiGroups:
   - ""
   resources:
-  - events
+  - services
+  - serviceaccounts
+  - pods
+  - secrets
+  - configmaps
+  - persistentvolumeclaims
   verbs:
   - create
-  - patch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
+
 - apiGroups:
   - networking.k8s.io
   resources:
@@ -44,18 +48,14 @@ rules:
   - patch
   - update
   - watch
+
 - apiGroups:
   - ""
   resources:
-  - services
+  - events
   verbs:
   - create
-  - delete
-  - get
-  - list
   - patch
-  - update
-  - watch
 
 - apiGroups:
   - k8s.fabkli.ch
