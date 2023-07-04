@@ -80,5 +80,6 @@ jobs:
 
       - name: deploy
         run: |
+          make kustomize
           make undeploy
           make deploy
