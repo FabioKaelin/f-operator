@@ -86,38 +86,25 @@ type FromReference struct {
 type FdeploymentStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Represents the observations of a Fdeployment's current state.
-	// Fdeployment.status.conditions.type are: "Available", "Progressing", and "Degraded"
-	// Fdeployment.status.conditions.status are one of True, False, Unknown.
-	// Fdeployment.status.conditions.reason the value should be a CamelCase string and producers of specific
-	// condition types may define expected values and meanings for this field, and whether the values
-	// are considered a guaranteed API.
-	// Fdeployment.status.conditions.Message is a human readable message indicating details about the transition.
-	// For further information see: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
-// Fdeployment is the Schema for the fdeployments API
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="How many replicas has this deployment"
-// +kubebuilder:printcolumn:name="Host",type="string",JSONPath=".spec.host",description="Which host has this deployment"
-// +kubebuilder:printcolumn:name="Path",type="string",JSONPath=".spec.path",description="Which subpath has this deployment"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:printcolumn:name="Tag",type="string",JSONPath=".spec.tag",description="Which image tag is deployed",priority=1
-// +kubebuilder:printcolumn:name="Port",type="integer",JSONPath=".spec.port",description="Which port is targeted",priority=1
+// Fdeployment is the Schema for the fdeployments API
 type Fdeployment struct {
-	// TODO: Add ready to print columns (most likely from status (which also has to be done first))
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   FdeploymentSpec   `json:"spec,omitempty"`
 	Status FdeploymentStatus `json:"status,omitempty"`
 }
+
+// // DeepCopyObject implements client.Object.
+// func (*Fdeployment) DeepCopyObject() runtime.Object {
+// 	panic("unimplemented")
+// }
 
 //+kubebuilder:object:root=true
 

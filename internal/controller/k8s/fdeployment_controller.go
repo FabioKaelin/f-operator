@@ -14,40 +14,36 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package k8s
 
 import (
 	"context"
 	"fmt"
-
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/tools/record"
-
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	networking "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-	networking "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	k8sv1 "github.com/fabiokaelin/f-operator/api/v1"
+	k8sv1 "github.com/fabiokaelin/f-operator/api/k8s/v1"
+	"github.com/fabiokaelin/f-operator/internal/utils"
 	"github.com/go-logr/logr"
-
-	utils "github.com/fabiokaelin/f-operator/utils"
-
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // FdeploymentReconciler reconciles a Fdeployment object
@@ -74,7 +70,7 @@ const fdeploymentFinalizer = "k8s.fabkli.ch/finalizer"
 // the user.
 //
 // For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
 
 // +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/status,verbs=get;update;patch
@@ -83,7 +79,6 @@ const fdeploymentFinalizer = "k8s.fabkli.ch/finalizer"
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services;serviceaccounts;pods;secrets;configmaps;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
-
 func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	fmt.Println("------------------")
 	log := log.FromContext(ctx)
@@ -534,6 +529,18 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager sets up the controller with the Manager.
+func (r *FdeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&k8sv1.Fdeployment{}).
+		Owns(&corev1.ServiceAccount{}).
+		Owns(&corev1.Service{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&networking.Ingress{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
+		Complete(r)
+}
+
 func (r *FdeploymentReconciler) setStatusToUnknown(ctx context.Context, fdeployment *k8sv1.Fdeployment, req reconcile.Request, log logr.Logger, flog utils.Log) error {
 	// if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
 	// 	flog.Info(err, "Failed to re-fetch fdeployment")
@@ -881,16 +888,4 @@ func labelsForFDeployment(name string, image string) map[string]string {
 		"app.kubernetes.io/part-of":  "f-operator",
 		// "app.kubernetes.io/created-by": "controller-manager",
 	}
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *FdeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&k8sv1.Fdeployment{}).
-		Owns(&corev1.ServiceAccount{}).
-		Owns(&corev1.Service{}).
-		Owns(&appsv1.Deployment{}).
-		Owns(&networking.Ingress{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
-		Complete(r)
 }

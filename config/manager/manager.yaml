@@ -11,15 +11,6 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: system
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: myregistrykey
-  namespace: system
-data:
-  .dockerconfigjson: ewoJImF1dGhzIjogewoJCSJnaGNyLmlvIjogewoJCQkiYXV0aCI6ICJSbUZpYVc5TFlXVnNhVzQ2WjJod1gydFlPRk5DVW14d2JHVmlZa1ZIY21aTFZXUkhNMUZzZG1kNU1rWldhekF5U3poQmVnPT0iCgkJfQoJfQp9
-type: kubernetes.io/dockerconfigjson
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -74,8 +65,6 @@ spec:
         # versions < 1.19 or on vendors versions which do NOT support this field by default (i.e. Openshift < 4.11 ).
         # seccompProfile:
         #   type: RuntimeDefault
-      imagePullSecrets:
-        - name: myregistrykey
       containers:
       - command:
         - /manager

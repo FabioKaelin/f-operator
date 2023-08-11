@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	k8sv1 "github.com/fabiokaelin/f-operator/api/v1"
-	"github.com/fabiokaelin/f-operator/controllers"
+	k8sv1 "github.com/fabiokaelin/f-operator/api/k8s/v1"
+	k8scontroller "github.com/fabiokaelin/f-operator/internal/controller/k8s"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -89,10 +89,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.FdeploymentReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("fdeployment-controller"),
+	if err = (&k8scontroller.FdeploymentReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Fdeployment")
 		os.Exit(1)
