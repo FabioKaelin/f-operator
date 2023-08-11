@@ -28,9 +28,9 @@ type FdatabaseSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Database     string        `json:"database"`
+	Database     DynamicConfig `json:"database"`
 	RootHost     string        `json:"rootHost,omitempty"`
-	User         string        `json:"user"`
+	User         DynamicConfig `json:"user"`
 	RootPassword DynamicConfig `json:"rootPassword"`
 	Password     DynamicConfig `json:"password"`
 }

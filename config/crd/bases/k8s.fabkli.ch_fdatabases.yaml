@@ -43,7 +43,30 @@ spec:
             description: FdatabaseSpec defines the desired state of Fdatabase
             properties:
               database:
-                type: string
+                properties:
+                  fromConfig:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  fromSecret:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  value:
+                    type: string
+                type: object
               password:
                 properties:
                   fromConfig:
@@ -97,7 +120,30 @@ spec:
                     type: string
                 type: object
               user:
-                type: string
+                properties:
+                  fromConfig:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  fromSecret:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  value:
+                    type: string
+                type: object
             required:
             - database
             - password

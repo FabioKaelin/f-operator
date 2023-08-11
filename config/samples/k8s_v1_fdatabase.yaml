@@ -3,9 +3,11 @@ kind: Fdatabase
 metadata:
   name: fdatabase-sample
 spec:
-  database: "tipp"
-  rootHost: "%" # optional
-  user: "usertipp"
+  rootHost: "localhost" # optional
+  database:
+    value: "tipp"
+  user:
+    value: "usertipp"
   rootPassword:
     fromSecret:
       name: dev-secrets

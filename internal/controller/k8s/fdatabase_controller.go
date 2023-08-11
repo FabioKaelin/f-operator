@@ -341,6 +341,14 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 	if err != nil {
 		return nil, err
 	}
+	user, err := generateDynamicConfig(&fdatabase.Spec.User, "MARIADB_USER")
+	if err != nil {
+		return nil, err
+	}
+	database, err := generateDynamicConfig(&fdatabase.Spec.Database, "MARIADB_DATABASE")
+	if err != nil {
+		return nil, err
+	}
 	rootPassword, err := generateDynamicConfig(&fdatabase.Spec.RootPassword, "MARIADB_ROOT_PASSWORD")
 	if err != nil {
 		return nil, err
@@ -372,20 +380,10 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 							Protocol:      corev1.ProtocolTCP,
 						}},
 						Env: []corev1.EnvVar{
-							{
-								Name:  "MARIADB_DATABASE",
-								Value: fdatabase.Spec.Database,
-							},
+							database,
 							rootPassword,
 							password,
-							{
-								Name:  "MARIADB_ROOT_HOST",
-								Value: "localhost",
-							},
-							{
-								Name:  "MARIADB_USER",
-								Value: fdatabase.Spec.User,
-							},
+							user,
 						},
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
