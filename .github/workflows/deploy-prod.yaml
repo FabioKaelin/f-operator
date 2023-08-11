@@ -87,3 +87,4 @@ jobs:
           make undeploy ignore-not-found=true | true
           make install
           make deploy
+

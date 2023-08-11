@@ -4,42 +4,25 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.12.0
-  name: fdeployments.k8s.fabkli.ch
+  name: fdatabases.k8s.fabkli.ch
 spec:
   group: k8s.fabkli.ch
   names:
-    kind: Fdeployment
-    listKind: FdeploymentList
-    plural: fdeployments
-    singular: fdeployment
+    kind: Fdatabase
+    listKind: FdatabaseList
+    plural: fdatabases
+    singular: fdatabase
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: How many replicas has this deployment
-      jsonPath: .spec.replicas
-      name: Replicas
-      type: integer
-    - description: Which host has this deployment
-      jsonPath: .spec.host
-      name: Host
+    - description: What is the name of the database
+      jsonPath: .spec.database
+      name: Database
       type: string
-    - description: Which subpath has this deployment
-      jsonPath: .spec.path
-      name: Path
+    - description: Which user should be used
+      jsonPath: .spec.user
+      name: User
       type: string
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    - description: Which image tag is deployed
-      jsonPath: .spec.tag
-      name: Tag
-      priority: 1
-      type: string
-    - description: Which port is targeted
-      jsonPath: .spec.port
-      name: Port
-      priority: 1
-      type: integer
     name: v1
     schema:
       openAPIV3Schema:
@@ -57,111 +40,72 @@ spec:
           metadata:
             type: object
           spec:
-            description: FdeploymentSpec defines the desired state of Fdeployment
+            description: FdatabaseSpec defines the desired state of Fdatabase
             properties:
-              env:
-                items:
-                  properties:
-                    fromConfig:
-                      properties:
-                        key:
-                          type: string
-                        name:
-                          type: string
-                      required:
-                      - key
-                      - name
-                      type: object
-                    fromSecret:
-                      properties:
-                        key:
-                          type: string
-                        name:
-                          type: string
-                      required:
-                      - key
-                      - name
-                      type: object
-                    name:
-                      type: string
-                    value:
-                      type: string
-                  required:
-                  - name
-                  type: object
-                type: array
-              healthCheck:
+              database:
+                type: string
+              password:
                 properties:
-                  livenessProbe:
+                  fromConfig:
                     properties:
-                      path:
+                      key:
+                        type: string
+                      name:
                         type: string
                     required:
-                    - path
+                    - key
+                    - name
                     type: object
-                  readinessProbe:
+                  fromSecret:
                     properties:
-                      path:
+                      key:
+                        type: string
+                      name:
                         type: string
                     required:
-                    - path
+                    - key
+                    - name
                     type: object
-                required:
-                - livenessProbe
-                - readinessProbe
+                  value:
+                    type: string
                 type: object
-              host:
+              rootHost:
                 type: string
-              image:
-                type: string
-              path:
-                type: string
-              port:
-                format: int32
-                type: integer
-              replicas:
-                format: int32
-                maximum: 5
-                minimum: 1
-                type: integer
-              resources:
+              rootPassword:
                 properties:
-                  limits:
+                  fromConfig:
                     properties:
-                      cpu:
+                      key:
                         type: string
-                      memory:
+                      name:
                         type: string
                     required:
-                    - cpu
-                    - memory
+                    - key
+                    - name
                     type: object
-                  requests:
+                  fromSecret:
                     properties:
-                      cpu:
+                      key:
                         type: string
-                      memory:
+                      name:
                         type: string
                     required:
-                    - cpu
-                    - memory
+                    - key
+                    - name
                     type: object
-                required:
-                - limits
-                - requests
+                  value:
+                    type: string
                 type: object
-              tag:
+              user:
                 type: string
             required:
-            - healthCheck
-            - host
-            - path
-            - port
-            - replicas
-            - resources
+            - database
+            - password
+            - rootPassword
+            - user
             type: object
           status:
-            description: FdeploymentStatus defines the observed state of Fdeployment
+            description: FdatabaseStatus defines the observed state of Fdatabase
             properties:
               conditions:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state

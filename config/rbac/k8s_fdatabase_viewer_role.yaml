@@ -1,0 +1,27 @@
+# permissions for end users to view fdatabases.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: fdatabase-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: f-operator
+    app.kubernetes.io/part-of: f-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: fdatabase-viewer-role
+rules:
+- apiGroups:
+  - k8s.fabkli.ch
+  resources:
+  - fdatabases
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - k8s.fabkli.ch
+  resources:
+  - fdatabases/status
+  verbs:
+  - get
