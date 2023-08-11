@@ -45,12 +45,15 @@ type DynamicConfig struct {
 type FdatabaseStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
 // Fdatabase is the Schema for the fdatabases API
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Database",type="string",JSONPath=".spec.database",description="What is the name of the database"
+// +kubebuilder:printcolumn:name="User",type="string",JSONPath=".spec.user",description="Which user should be used"
 type Fdatabase struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

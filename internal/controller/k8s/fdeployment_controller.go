@@ -740,7 +740,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 							},
 						},
 
-						// ImagePullPolicy: corev1.PullIfNotPresent,
+						ImagePullPolicy: corev1.PullIfNotPresent,
 						SecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot: &[]bool{false}[0],
 							Privileged:   &[]bool{true}[0],
@@ -886,6 +886,5 @@ func labelsForFDeployment(name string, image string) map[string]string {
 		"app.kubernetes.io/instance": name,
 		"app.kubernetes.io/version":  imageTag,
 		"app.kubernetes.io/part-of":  "f-operator",
-		// "app.kubernetes.io/created-by": "controller-manager",
 	}
 }

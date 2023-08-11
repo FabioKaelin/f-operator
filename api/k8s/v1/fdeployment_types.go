@@ -89,10 +89,16 @@ type FdeploymentStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
 // Fdeployment is the Schema for the fdeployments API
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="How many replicas has this deployment"
+// +kubebuilder:printcolumn:name="Host",type="string",JSONPath=".spec.host",description="Which host has this deployment"
+// +kubebuilder:printcolumn:name="Path",type="string",JSONPath=".spec.path",description="Which subpath has this deployment"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Tag",type="string",JSONPath=".spec.tag",description="Which image tag is deployed",priority=1
+// +kubebuilder:printcolumn:name="Port",type="integer",JSONPath=".spec.port",description="Which port is targeted",priority=1
 type Fdeployment struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
