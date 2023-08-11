@@ -1,6 +1,6 @@
 
 
-VERSION ?= 0.0.2
+VERSION ?= 0.1.0
 IMAGE_TAG_BASE ?= ghcr.io/fabiokaelin/f-operator
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
