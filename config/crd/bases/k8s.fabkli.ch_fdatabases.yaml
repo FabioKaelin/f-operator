@@ -1,0 +1,106 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.12.0
+  name: fdatabases.k8s.fabkli.ch
+spec:
+  group: k8s.fabkli.ch
+  names:
+    kind: Fdatabase
+    listKind: FdatabaseList
+    plural: fdatabases
+    singular: fdatabase
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Fdatabase is the Schema for the fdatabases API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: FdatabaseSpec defines the desired state of Fdatabase
+            properties:
+              database:
+                type: string
+              password:
+                properties:
+                  fromConfig:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  fromSecret:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  value:
+                    type: string
+                type: object
+              rootHost:
+                type: string
+              rootPassword:
+                properties:
+                  fromConfig:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  fromSecret:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  value:
+                    type: string
+                type: object
+              user:
+                type: string
+            required:
+            - database
+            - password
+            - rootPassword
+            - user
+            type: object
+          status:
+            description: FdatabaseStatus defines the observed state of Fdatabase
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -1,12 +1,6 @@
 apiVersion: k8s.fabkli.ch/v1
 kind: Fdeployment
 metadata:
-  labels:
-    app.kubernetes.io/name: fdeployment
-    app.kubernetes.io/instance: fdeployment-sample
-    app.kubernetes.io/part-of: f-operator
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: f-operator
   name: fdeployment-sample
 spec:
   path: "/"

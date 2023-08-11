@@ -28,8 +28,17 @@ type FdatabaseSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Fdatabase. Edit fdatabase_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Database     string        `json:"database"`
+	RootHost     string        `json:"rootHost,omitempty"`
+	User         string        `json:"user"`
+	RootPassword DynamicConfig `json:"rootPassword"`
+	Password     DynamicConfig `json:"password"`
+}
+
+type DynamicConfig struct {
+	Value      string        `json:"value,omitempty"`
+	FromConfig FromReference `json:"fromConfig,omitempty"`
+	FromSecret FromReference `json:"fromSecret,omitempty"`
 }
 
 // FdatabaseStatus defines the observed state of Fdatabase
