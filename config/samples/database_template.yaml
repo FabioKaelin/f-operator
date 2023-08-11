@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dev-db
+  labels:
+    app: dev-db
+spec:
+  # storageClassName: managed-csi
+  storageClassName: standard
+  # storageClassName: default
+  # storageClassName: ivp-foperator-file-temp-standard
+  accessModes:
+    - ReadWriteMany
+    # - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dev-db
+spec:
+  selector:
+    app: dev-db
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dev-db
+spec: # specification for deployment resource
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dev-db
+  template: # blueprint for Pod
+    metadata:
+      labels:
+        app: dev-db # service will look for this label
+    spec: # specification for Pod
+      containers:
+      - name: mariadb
+        image: mariadb:11
+        ports:
+        - containerPort: 3306 #default one
+        env:
+        - name: MARIADB_DATABASE
+          value: tipp
+        - name: MARIADB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dev-secrets
+              key: DATABASE_ROOT_PASSWORD
+        - name: MARIADB_ROOT_HOST
+          value: "localhost"
+        - name: MARIADB_USER
+          value: tippuser
+        - name: MARIADB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dev-secrets
+              key: DATABASE_PASSWORD
+        resources:
+          requests: # minimum (ensured)
+            memory: "128Mi"
+            cpu: "50m"
+          limits: # maximum (allowed)
+            memory: "1024Mi"
+            cpu: "200m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+
+        volumeMounts:
+        - name: dev-db-pv
+          mountPath: /var/lib/mysql
+          readOnly: false
+          mountPropagation: None
+          # mountPropagation: HostToContainer
+          # subPath: mariadb
+
+        # command: ["sh", "-c", "ls -la /var/lib/mysql"]
+      volumes:
+      - name: dev-db-pv
+        persistentVolumeClaim:
+          claimName: dev-db
+
+      tolerations:
+      - effect: NoSchedule
+        key: kubernetes.azure.com/scalesetpriority
+        operator: Equal
+        value: spot
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 2000
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
