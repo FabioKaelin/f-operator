@@ -6,6 +6,14 @@
 
 Run Privileged as option
 
+## Commands
+
+### Create a new CRD
+
+```sh
+kubebuilder create api --group k8s --version v1 --kind Fdatabase --resource --controller
+```
+
 ## Notes
 
 ### Testing

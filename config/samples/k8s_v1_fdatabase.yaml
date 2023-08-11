@@ -1,0 +1,12 @@
+apiVersion: k8s.fabkli.ch/v1
+kind: Fdatabase
+metadata:
+  labels:
+    app.kubernetes.io/name: fdatabase
+    app.kubernetes.io/instance: fdatabase-sample
+    app.kubernetes.io/part-of: f-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: f-operator
+  name: fdatabase-sample
+spec:
+  # TODO(user): Add fields here
