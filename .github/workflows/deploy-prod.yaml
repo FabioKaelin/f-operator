@@ -81,4 +81,5 @@ jobs:
 
       - name: deploy
         run: |
+          make install
           make deploy

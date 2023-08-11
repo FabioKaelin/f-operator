@@ -40,7 +40,8 @@ type FdeploymentSpec struct {
 
 	Port int32 `json:"port"`
 
-	Tag string `json:"tag,omitempty"`
+	Image string `json:"image,omitempty"`
+	Tag   string `json:"tag,omitempty"`
 
 	Resources FdeploymentResources `json:"resources"`
 
