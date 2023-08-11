@@ -1,6 +1,10 @@
-# f-operator
+# F-Operator
 
 // TODO(user): Add simple overview of use/purpose
+
+## Ideas
+
+Run Privileged as option
 
 ## Notes
 

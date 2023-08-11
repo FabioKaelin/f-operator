@@ -19,7 +19,6 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -33,13 +32,16 @@ jobs:
 
       - name: build and push
         run: |
-          git checkout main
           make docker-buildx
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - uses: azure/setup-kubectl@v3
-        # with:
-          # version: '<version>' # default is latest stable
         id: install
 
       - name: set kubeconfig
@@ -81,5 +83,7 @@ jobs:
 
       - name: deploy
         run: |
+          make kustomize
+          make undeploy ignore-not-found=true | true
           make install
           make deploy
