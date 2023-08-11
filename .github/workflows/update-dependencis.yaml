@@ -1,8 +1,8 @@
 name: Update dependencies
 
 on:
-  schedule:
-    - cron: '0 4 * * 0'
+  # schedule:
+  #   - cron: '0 4 * * 0'
   # push:
   #   branches:
   #   - "develop"
@@ -35,7 +35,7 @@ jobs:
           git config --global user.name "DependenciesUpdater"
           git config --global user.email "supermae206+dependencies@gmail.com"
 
-          git checkout main
+          git checkout develop
 
           go mod tidy
           go get -u -v ./...

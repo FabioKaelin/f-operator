@@ -113,6 +113,8 @@ spec:
                 type: object
               host:
                 type: string
+              image:
+                type: string
               path:
                 type: string
               port:

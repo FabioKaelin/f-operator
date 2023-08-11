@@ -411,7 +411,15 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	foundDeployment.Spec.Replicas = &fdeployment.Spec.Replicas
 	foundDeployment.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort = fdeployment.Spec.Port
-	foundDeployment.Spec.Template.Spec.Containers[0].Image = fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
+
+	imageName := ""
+	if fdeployment.Spec.Image != "" {
+		imageName = fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Spec.Image, fdeployment.Spec.Tag)
+	} else {
+		imageName = fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
+	}
+
+	foundDeployment.Spec.Template.Spec.Containers[0].Image = imageName
 	foundDeployment.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Port = intstr.FromInt(int(fdeployment.Spec.Port))
 	foundDeployment.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Path = fdeployment.Spec.HealthCheck.ReadinessProbe.Path
 	foundDeployment.Spec.Template.Spec.Containers[0].LivenessProbe.HTTPGet.Port = intstr.FromInt(int(fdeployment.Spec.Port))
@@ -630,7 +638,12 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 	replicas := fdeployment.Spec.Replicas
 	port := fdeployment.Spec.Port
 	name := fdeployment.Name
-	image := fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
+	image := ""
+	if fdeployment.Spec.Image != "" {
+		image = fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Spec.Image, fdeployment.Spec.Tag)
+	} else {
+		image = fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
+	}
 	ls := labelsForFDeployment(fdeployment.Name, image)
 
 	// create env vars
