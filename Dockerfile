@@ -3,6 +3,8 @@ FROM golang:1.20 as builder
 ARG TARGETOS
 ARG TARGETARCH
 
+LABEL org.opencontainers.image.source https://github.com/fabiokaelin/f-operator
+
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
