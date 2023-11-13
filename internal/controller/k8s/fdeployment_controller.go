@@ -712,9 +712,10 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 									Scheme: corev1.URISchemeHTTP,
 								},
 							},
-							PeriodSeconds:    10,
-							SuccessThreshold: 1,
-							TimeoutSeconds:   1,
+							PeriodSeconds:       20,
+							SuccessThreshold:    1,
+							TimeoutSeconds:      1,
+							InitialDelaySeconds: 5,
 						},
 						LivenessProbe: &corev1.Probe{
 							FailureThreshold: 3,
@@ -725,9 +726,10 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 									Scheme: corev1.URISchemeHTTP,
 								},
 							},
-							PeriodSeconds:    10,
-							SuccessThreshold: 1,
-							TimeoutSeconds:   1,
+							PeriodSeconds:       30,
+							SuccessThreshold:    1,
+							TimeoutSeconds:      1,
+							InitialDelaySeconds: 10,
 						},
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
