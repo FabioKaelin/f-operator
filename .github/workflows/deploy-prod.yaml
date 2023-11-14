@@ -84,7 +84,7 @@ jobs:
       - name: deploy
         run: |
           make kustomize
-          make undeploy ignore-not-found=true | true
+          # make undeploy ignore-not-found=true | true
           make install
           make deploy
 

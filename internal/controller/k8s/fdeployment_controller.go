@@ -72,13 +72,14 @@ const fdeploymentFinalizer = "k8s.fabkli.ch/finalizer"
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
 
-// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/finalizers,verbs=update
-// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=services;serviceaccounts;pods;secrets;configmaps;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=services;serviceaccounts;pods;secrets;configmaps;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete;
+
 func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	fmt.Println("------------------")
 	log := log.FromContext(ctx)
@@ -712,9 +713,10 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 									Scheme: corev1.URISchemeHTTP,
 								},
 							},
-							PeriodSeconds:    10,
-							SuccessThreshold: 1,
-							TimeoutSeconds:   1,
+							PeriodSeconds:       20,
+							SuccessThreshold:    1,
+							TimeoutSeconds:      1,
+							InitialDelaySeconds: 5,
 						},
 						LivenessProbe: &corev1.Probe{
 							FailureThreshold: 3,
@@ -725,9 +727,10 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 									Scheme: corev1.URISchemeHTTP,
 								},
 							},
-							PeriodSeconds:    10,
-							SuccessThreshold: 1,
-							TimeoutSeconds:   1,
+							PeriodSeconds:       30,
+							SuccessThreshold:    1,
+							TimeoutSeconds:      1,
+							InitialDelaySeconds: 10,
 						},
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
@@ -740,7 +743,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 							},
 						},
 
-						ImagePullPolicy: corev1.PullIfNotPresent,
+						ImagePullPolicy: corev1.PullAlways,
 						SecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot: &[]bool{false}[0],
 							Privileged:   &[]bool{true}[0],

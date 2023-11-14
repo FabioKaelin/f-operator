@@ -3,6 +3,8 @@ FROM golang:1.20 as builder
 ARG TARGETOS
 ARG TARGETARCH
 
+LABEL org.opencontainers.image.source https://github.com/fabiokaelin/f-operator
+
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -15,6 +17,7 @@ RUN go mod download
 COPY cmd/main.go cmd/main.go
 COPY api/ api/
 COPY internal/controller/ internal/controller/
+COPY internal/utils/ internal/utils/
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command

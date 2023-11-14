@@ -56,12 +56,13 @@ const (
 
 const fdatabaseFinalizer = "k8s.fabkli.ch/finalizer"
 
-// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/finalizers,verbs=update
-// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=services;serviceaccounts;pods;secrets;configmaps;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete;
+
 func (r *FdatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	fmt.Println("|||||||||||||||||||||||||||||||||||||||||||||||||")
 	log := log.FromContext(ctx)
@@ -268,6 +269,45 @@ func (r *FdatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	environment, err := getEnv(fdatabase)
+	if err != nil {
+		flog.Info(err, "Failed to get environment variables")
+		return ctrl.Result{}, err
+	}
+
+	foundDeployment.Spec.Template.Spec.Containers[0].Env = environment
+
+	err = r.Update(ctx, foundDeployment)
+	if err != nil {
+		flog.Info(err, "Failed to update Deployment (6)")
+		meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeAvailableFDatabase,
+			Status: metav1.ConditionFalse, Reason: "Resizing",
+			Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdatabase.Name, err)})
+
+		flog.Info("Update 7 before")
+		err := r.Status().Update(ctx, fdatabase)
+		flog.Info("Update 7 after")
+
+		if err != nil {
+			flog.Info(err, "Failed to update FDatabase status 4")
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, err
+	}
+
+	// The following implementation will update the status
+	meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeAvailableFDatabase,
+		Status: metav1.ConditionTrue, Reason: "Reconciling",
+		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", fdatabase.Name, 1)})
+
+	err = r.Status().Update(ctx, fdatabase)
+
+	if err != nil {
+		flog.Info(err, "Failed to update FDatabase status 5")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -337,19 +377,7 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 	// int to int32
 	replicas := int32(1)
 	ls := labelsForFDatabase(fdatabase.Name)
-	password, err := generateDynamicConfig(&fdatabase.Spec.Password, "MARIADB_PASSWORD")
-	if err != nil {
-		return nil, err
-	}
-	user, err := generateDynamicConfig(&fdatabase.Spec.User, "MARIADB_USER")
-	if err != nil {
-		return nil, err
-	}
-	database, err := generateDynamicConfig(&fdatabase.Spec.Database, "MARIADB_DATABASE")
-	if err != nil {
-		return nil, err
-	}
-	rootPassword, err := generateDynamicConfig(&fdatabase.Spec.RootPassword, "MARIADB_ROOT_PASSWORD")
+	environment, err := getEnv(fdatabase)
 	if err != nil {
 		return nil, err
 	}
@@ -379,12 +407,7 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 							ContainerPort: 3306,
 							Protocol:      corev1.ProtocolTCP,
 						}},
-						Env: []corev1.EnvVar{
-							database,
-							rootPassword,
-							password,
-							user,
-						},
+						Env: environment,
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
 								"cpu":    resource.MustParse("128Mi"),
@@ -448,17 +471,43 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 		},
 	}
 
-	if fdatabase.Spec.RootHost != "" {
-		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-			Name:  "MARIADB_ROOT_HOST",
-			Value: fdatabase.Spec.RootHost,
-		})
-	}
-
 	if err := ctrl.SetControllerReference(fdatabase, deployment, r.Scheme); err != nil {
 		return nil, err
 	}
 	return deployment, nil
+}
+
+func getEnv(fdatabase *k8sv1.Fdatabase) ([]corev1.EnvVar, error) {
+	password, err := generateDynamicConfig(&fdatabase.Spec.Password, "MARIADB_PASSWORD")
+	if err != nil {
+		return nil, err
+	}
+	user, err := generateDynamicConfig(&fdatabase.Spec.User, "MARIADB_USER")
+	if err != nil {
+		return nil, err
+	}
+	database, err := generateDynamicConfig(&fdatabase.Spec.Database, "MARIADB_DATABASE")
+	if err != nil {
+		return nil, err
+	}
+	rootPassword, err := generateDynamicConfig(&fdatabase.Spec.RootPassword, "MARIADB_ROOT_PASSWORD")
+	if err != nil {
+		return nil, err
+	}
+
+	environment := []corev1.EnvVar{
+		database,
+		rootPassword,
+		password,
+		user,
+	}
+	if fdatabase.Spec.RootHost != "" {
+		environment = append(environment, corev1.EnvVar{
+			Name:  "MARIADB_ROOT_HOST",
+			Value: fdatabase.Spec.RootHost,
+		})
+	}
+	return environment, nil
 }
 
 func generateDynamicConfig(config *k8sv1.DynamicConfig, name string) (corev1.EnvVar, error) {
@@ -522,7 +571,7 @@ func (r *FdatabaseReconciler) serviceForFDatabase(fdatabase *k8sv1.Fdatabase) (*
 	return svc, nil
 }
 
-// labelsForFDeployment returns the labels for selecting the resources
+// labelsForFDatabase returns the labels for selecting the resources
 // More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/
 func labelsForFDatabase(name string) map[string]string {
 	return map[string]string{

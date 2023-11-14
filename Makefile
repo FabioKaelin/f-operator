@@ -69,6 +69,12 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 ##@ Build
 
+.PHONY: info
+info: ## Print the version number.
+	@echo imageVersion: $(VERSION)
+	@echo imageTagBase: $(IMAGE_TAG_BASE)
+	@echo imageTag: $(IMG)
+
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
@@ -127,6 +133,10 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
+.PHONY: create-secret
+create-secret: ## Create a docker-registry secret for the f-operator image.
+	$(KUBECTL)  create secret -n f-operator-system generic regcred --from-file=.dockerconfigjson="${HOME}/.docker/config-backup.json" --type=kubernetes.io/dockerconfigjson
 
 ##@ Build Dependencies
 
