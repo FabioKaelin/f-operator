@@ -56,12 +56,13 @@ const (
 
 const fdatabaseFinalizer = "k8s.fabkli.ch/finalizer"
 
-// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/finalizers,verbs=update
-// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=services;serviceaccounts;pods;secrets;configmaps;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete;
+
 func (r *FdatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	fmt.Println("|||||||||||||||||||||||||||||||||||||||||||||||||")
 	log := log.FromContext(ctx)
