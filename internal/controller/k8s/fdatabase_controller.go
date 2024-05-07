@@ -359,7 +359,7 @@ func (r *FdatabaseReconciler) pvcForFDatabase(fdatabase *k8sv1.Fdatabase) (*core
 			StorageClassName: &storaceClassName,
 			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
 			VolumeMode:       &filesystem,
-			Resources: corev1.ResourceRequirements{
+			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: resource.MustParse(storage),
 				},
