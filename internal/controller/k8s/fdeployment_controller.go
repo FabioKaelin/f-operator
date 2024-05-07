@@ -19,6 +19,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -636,6 +637,11 @@ func getEnvironment(fdeployment *k8sv1.Fdeployment) ([]corev1.EnvVar, error) {
 		}
 		envVars = append(envVars, currentEnv)
 	}
+	versionEnv := corev1.EnvVar{
+		Name:  "F_VERSION",
+		Value: fdeployment.Spec.Tag,
+	}
+	envVars = append(envVars, versionEnv)
 	return envVars, nil
 }
 
@@ -883,7 +889,7 @@ func (r *FdeploymentReconciler) serviceAccountForFDeployment(
 // labelsForFDeployment returns the labels for selecting the resources
 // More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/
 func labelsForFDeployment(name string, image string) map[string]string {
-	var imageTag string
+	imageTag := strings.Split(image, ":")[1]
 	return map[string]string{
 		"app.kubernetes.io/name":     name,
 		"app.kubernetes.io/instance": name,
