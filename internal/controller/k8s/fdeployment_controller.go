@@ -641,7 +641,12 @@ func getEnvironment(fdeployment *k8sv1.Fdeployment) ([]corev1.EnvVar, error) {
 		Name:  "F_VERSION",
 		Value: fdeployment.Spec.Tag,
 	}
+	versionEnvVite := corev1.EnvVar{
+		Name:  "VITE_F_VERSION",
+		Value: fdeployment.Spec.Tag,
+	}
 	envVars = append(envVars, versionEnv)
+	envVars = append(envVars, versionEnvVite)
 	return envVars, nil
 }
 
