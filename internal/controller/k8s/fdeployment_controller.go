@@ -429,8 +429,14 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	foundIngress.Spec.Rules[0].Host = fdeployment.Spec.Host
 	foundIngress.Spec.Rules[0].HTTP.Paths[0].Path = fdeployment.Spec.Path
 	// resource limits and request
+	flog.Info("fdeployment.Spec.Resources.Limits.CPU", fdeployment.Spec.Resources.Limits.CPU)
 	limitCpu := resource.MustParse(fdeployment.Spec.Resources.Limits.CPU)
+	flog.Info("limitCpu", limitCpu)
+	flog.Info("limitCpu.Value()", limitCpu.Value())
 	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().Set(limitCpu.Value())
+	flog.Info("foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu()", foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu())
+	flog.Info("foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits", foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits)
+	flog.Info("foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().Value()", foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().Value())
 	limitMemory := resource.MustParse(fdeployment.Spec.Resources.Limits.Memory)
 	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().Set(limitMemory.Value())
 	requestCpu := resource.MustParse(fdeployment.Spec.Resources.Requests.CPU)
