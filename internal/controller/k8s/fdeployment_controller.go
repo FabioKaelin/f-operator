@@ -435,8 +435,6 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	requestMemory := resource.MustParse(fdeployment.Spec.Resources.Requests.Memory)
 	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Requests.Memory().Set(requestMemory.Value())
 
-	spew.Dump(foundDeployment)
-
 	// update env
 	env, err := getEnvironment(fdeployment)
 	if err != nil {
@@ -444,6 +442,9 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 	foundDeployment.Spec.Template.Spec.Containers[0].Env = env
+
+	spew.Dump(foundDeployment)
+	spew.Dump(foundDeployment.Spec.Template.Spec.Containers[0].Resources)
 
 	err = r.Update(ctx, foundDeployment)
 	if err != nil {
