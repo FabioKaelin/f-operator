@@ -120,6 +120,7 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if fdeployment.Status.Conditions == nil || len(fdeployment.Status.Conditions) == 0 {
 		err := r.setStatusToUnknown(ctx, fdeployment, req, log, flog)
 		if err != nil {
+			flog.Info("Failed to set status to Unknown", err)
 			return ctrl.Result{}, err
 		}
 	}
@@ -131,7 +132,7 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		flog.Info("Adding Finalizer for fdeployment")
 		// log.Info("Adding Finalizer for fdeployment")
 		if ok := controllerutil.AddFinalizer(fdeployment, fdeploymentFinalizer); !ok {
-			flog.Info(err, "Failed to add finalizer into the custom resource")
+			flog.Info("Failed to add finalizer into the custom resource", err)
 			// log.Error(err, "Failed to add finalizer into the custom resource")
 			return ctrl.Result{Requeue: true}, nil
 		}
@@ -145,7 +146,7 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		flog.Info("Update 1 after")
 
 		if err != nil {
-			flog.Info(err, "Failed to update custom resource to add finalizer")
+			flog.Info(err, "Failed to update custom resource to add finalizer", err)
 			// log.Error(err, "Failed to update custom resource to add finalizer")
 			return ctrl.Result{}, err
 		}
@@ -168,7 +169,7 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 			if err != nil {
 				// log.Error(err, "Failed to update fdeployment status")
-				flog.Info(err, "Failed to update fdeployment status 1")
+				flog.Info("Failed to update fdeployment status 1", err)
 				return ctrl.Result{}, err
 			}
 
@@ -406,6 +407,8 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		flog.Info(err, "Failed to get Deployment")
 		return ctrl.Result{}, err
 	}
+
+	flog.Info("Got all resources")
 
 	foundDeployment.Spec.Replicas = &fdeployment.Spec.Replicas
 	foundDeployment.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort = fdeployment.Spec.Port
