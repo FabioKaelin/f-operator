@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/davecgh/go-spew/spew"
 	k8sv1 "github.com/fabiokaelin/f-operator/api/k8s/v1"
 	"github.com/fabiokaelin/f-operator/internal/utils"
 	"github.com/go-logr/logr"
@@ -433,6 +434,8 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Requests.Cpu().Set(requestCpu.Value())
 	requestMemory := resource.MustParse(fdeployment.Spec.Resources.Requests.Memory)
 	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Requests.Memory().Set(requestMemory.Value())
+
+	spew.Dump(foundDeployment)
 
 	// update env
 	env, err := getEnvironment(fdeployment)
