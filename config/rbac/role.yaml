@@ -5,18 +5,6 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - ""
   resources:
   - configmaps
@@ -41,9 +29,9 @@ rules:
   - create
   - patch
 - apiGroups:
-  - k8s.fabkli.ch
+  - apps
   resources:
-  - fdatabases
+  - deployments
   verbs:
   - create
   - delete
@@ -55,20 +43,7 @@ rules:
 - apiGroups:
   - k8s.fabkli.ch
   resources:
-  - fdatabases/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - k8s.fabkli.ch
-  resources:
-  - fdatabases/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - k8s.fabkli.ch
-  resources:
+  - fdatabases
   - fdeployments
   verbs:
   - create
@@ -81,12 +56,14 @@ rules:
 - apiGroups:
   - k8s.fabkli.ch
   resources:
+  - fdatabases/finalizers
   - fdeployments/finalizers
   verbs:
   - update
 - apiGroups:
   - k8s.fabkli.ch
   resources:
+  - fdatabases/status
   - fdeployments/status
   verbs:
   - get
