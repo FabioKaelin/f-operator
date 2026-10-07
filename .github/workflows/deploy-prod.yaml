@@ -71,7 +71,7 @@ jobs:
           cp -r config/gateway dist/gateway
           cp docs/migration.md dist/migration.md
           tar -czf dist/gateway-config.tar.gz -C dist gateway
-          sha256sum dist/install.yaml dist/image.txt dist/gateway-config.tar.gz > dist/SHA256SUMS
+          (cd dist && sha256sum install.yaml image.txt gateway-config.tar.gz migration.md > SHA256SUMS)
       - name: Publish release artifacts
         env:
           GH_TOKEN: ${{ github.token }}
