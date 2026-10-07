@@ -28,6 +28,7 @@ type FdeploymentSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// +kubebuilder:validation:Pattern=`^/`
 	Path string `json:"path"`
 
 	Host string `json:"host"`
@@ -38,16 +39,27 @@ type FdeploymentSpec struct {
 
 	Replicas int32 `json:"replicas"`
 
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
 	Port int32 `json:"port"`
 
 	Image string `json:"image,omitempty"`
 	Tag   string `json:"tag,omitempty"`
+
+	Security FdeploymentSecurity `json:"security,omitempty"`
 
 	Resources FdeploymentResources `json:"resources"`
 
 	HealthCheck FdeploymentHealthCheck `json:"healthCheck"`
 
 	Environments []Environment `json:"env,omitempty"`
+}
+
+// FdeploymentSecurity allows explicit compatibility exceptions for application images.
+// Root images remain supported; blanket privilege is disabled by default.
+type FdeploymentSecurity struct {
+	Privileged   bool `json:"privileged,omitempty"`
+	RunAsNonRoot bool `json:"runAsNonRoot,omitempty"`
 }
 
 type FdeploymentHealthCheck struct {
@@ -59,12 +71,16 @@ type HealthProbe struct {
 	Path string `json:"path"`
 }
 
+// +kubebuilder:validation:XValidation:rule="quantity(self.requests.cpu).compareTo(quantity(self.limits.cpu)) <= 0",message="CPU request must not exceed limit"
+// +kubebuilder:validation:XValidation:rule="quantity(self.requests.memory).compareTo(quantity(self.limits.memory)) <= 0",message="memory request must not exceed limit"
 type FdeploymentResources struct {
 	Requests Resource `json:"requests"`
 
 	Limits Resource `json:"limits"`
 }
 
+// +kubebuilder:validation:XValidation:rule="isQuantity(self.cpu) && quantity(self.cpu).isGreaterThan(quantity('0'))",message="cpu must be a positive Kubernetes quantity"
+// +kubebuilder:validation:XValidation:rule="isQuantity(self.memory) && quantity(self.memory).isGreaterThan(quantity('0'))",message="memory must be a positive Kubernetes quantity"
 type Resource struct {
 	CPU    string `json:"cpu"`
 	Memory string `json:"memory"`

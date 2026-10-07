@@ -1,31 +1,14 @@
-/*
-Copyright 2023.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package k8s
 
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
-
+	k8sv1 "github.com/fabiokaelin/f-operator/api/k8s/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-
 	networking "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,580 +17,343 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
-
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/davecgh/go-spew/spew"
-	k8sv1 "github.com/fabiokaelin/f-operator/api/k8s/v1"
-	"github.com/fabiokaelin/f-operator/internal/utils"
-	"github.com/go-logr/logr"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	"strings"
+	"time"
 )
 
-// FdeploymentReconciler reconciles a Fdeployment object
 type FdeploymentReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme               *runtime.Scheme
+	Recorder             record.EventRecorder
+	GatewayName          string
+	GatewayNamespace     string
+	GatewayListener      string
+	CleanupLegacyIngress bool
 }
 
-const (
-	// typeAvailableMemcached represents the status of the Deployment reconciliation
-	typeAvailableFDeployment = "Available"
-	// typeDegradedMemcached represents the status used when the custom resource is deleted and the finalizer operations are must to occur.
-	typeDegradedFDeployment = "Degraded"
-)
-
+const typeAvailableFDeployment = "Available"
 const fdeploymentFinalizer = "k8s.fabkli.ch/finalizer"
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Fdeployment object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
-
-//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdeployments/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=services;serviceaccounts;pods;secrets;configmaps;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete;
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=core,resources=services;serviceaccounts,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=core,resources=secrets;configmaps,verbs=get;list;watch
+//+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;delete
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch
 
 func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	fmt.Println("------------------")
-	log := log.FromContext(ctx)
-	flog := utils.Init()
-	r.Recorder = record.NewFakeRecorder(100)
-	fdeployment := &k8sv1.Fdeployment{}
-	flog.Info("req.NamespacedName", req.NamespacedName)
-	err := r.Get(ctx, req.NamespacedName, fdeployment)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			// If the custom resource is not found then, it usually means that it was deleted or not created
-			// In this way, we will stop the reconciliation
-			// flog.Info("fdeployment resource not found. Ignoring since object must be deleted")
-			flog.Info("fdeployment resource not found. Ignoring since object must be deleted")
-			// log.Info("fdeployment resource not found. Ignoring since object must be deleted")
-			return ctrl.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		flog.Info(err, "Failed to get fdeployment")
-		// log.Error(err, "Failed to get fdeployment")
-		return ctrl.Result{}, err
+	f := &k8sv1.Fdeployment{}
+	if err := r.Get(ctx, req.NamespacedName, f); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
-	// flog.Info("ooooooooooooooooooooooooooooooo")
-
-	// flog.Info("name:", req.Name)
-	// flog.Info("namespace:", req.Namespace)
-	// flog.Info("fdeployment")
-	// spew.Dump(fdeployment)
-	// flog.Info("------------")
-	// flog.Info("req.NamespacedName")
-	// spew.Dump(req.NamespacedName)
-	// flog.Info("ooooooooooooooooooooooooooooooo")
-
-	// !Let's just set the status as Unknown when no status are available
-	if fdeployment.Status.Conditions == nil || len(fdeployment.Status.Conditions) == 0 {
-		err := r.setStatusToUnknown(ctx, fdeployment, req, log, flog)
-		if err != nil {
-			flog.Info("Failed to set status to Unknown", err)
-			return ctrl.Result{}, err
-		}
-	}
-
-	// avoid this error:
-	// Operation cannot be fulfilled on fdeployments.k8s.fabkli.ch \"fdeployment-sample\": the object has been modified; please apply your changes to the latest version and try again
-
-	if !controllerutil.ContainsFinalizer(fdeployment, fdeploymentFinalizer) {
-		flog.Info("Adding Finalizer for fdeployment")
-		// log.Info("Adding Finalizer for fdeployment")
-		if ok := controllerutil.AddFinalizer(fdeployment, fdeploymentFinalizer); !ok {
-			flog.Info("Failed to add finalizer into the custom resource", err)
-			// log.Error(err, "Failed to add finalizer into the custom resource")
-			return ctrl.Result{Requeue: true}, nil
-		}
-
-		// if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
-		// 	log.Error(err, "Failed to re-fetch fdeployment")
-		// 	return ctrl.Result{}, err
-		// }
-		flog.Info("Update 1 before")
-		err = r.Update(ctx, fdeployment)
-		flog.Info("Update 1 after")
-
-		if err != nil {
-			flog.Info(err, "Failed to update custom resource to add finalizer", err)
-			// log.Error(err, "Failed to update custom resource to add finalizer")
-			return ctrl.Result{}, err
-		}
-	} // Check if the fdeployment instance is marked to be deleted, which is
-	// indicated by the deletion timestamp being set.
-	isFDeploymentMarkedToBeDeleted := fdeployment.GetDeletionTimestamp() != nil
-	if isFDeploymentMarkedToBeDeleted {
-		if controllerutil.ContainsFinalizer(fdeployment, fdeploymentFinalizer) {
-			// log.Info("Performing Finalizer Operations for fdeployment before delete CR")
-			flog.Info("Performing Finalizer Operations for fdeployment before delete CR")
-
-			// Let's add here an status "Downgrade" to define that this resource begin its process to be terminated.
-			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeDegradedFDeployment,
-				Status: metav1.ConditionUnknown, Reason: "Finalizing",
-				Message: fmt.Sprintf("Performing finalizer operations for the custom resource: %s ", fdeployment.Name)})
-
-			flog.Info("Update 2 before")
-			err := r.Status().Update(ctx, fdeployment)
-			flog.Info("Update 2 after")
-
-			if err != nil {
-				// log.Error(err, "Failed to update fdeployment status")
-				flog.Info("Failed to update fdeployment status 1", err)
-				return ctrl.Result{}, err
-			}
-
-			// Perform all operations required before remove the finalizer and allow
-			// the Kubernetes API to remove the custom resource.
-			r.doFinalizerOperationsForFDeployment(fdeployment)
-
-			// TODO(user): If you add operations to the doFinalizerOperationsForFDeployment method
-			// then you need to ensure that all worked fine before deleting and updating the Downgrade status
-			// otherwise, you should requeue here.
-
-			// Re-fetch the fdeployment Custom Resource before update the status
-			// so that we have the latest state of the resource on the cluster and we will avoid
-			// raise the issue "the object has been modified, please apply
-			// your changes to the latest version and try again" which would re-trigger the reconciliation
-			// if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
-			// 	flog.Info(err, "Failed to re-fetch fdeployment")
-			// 	// log.Error(err, "Failed to re-fetch fdeployment")
-			// 	return ctrl.Result{}, err
-			// }
-
-			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeDegradedFDeployment,
-				Status: metav1.ConditionTrue, Reason: "Finalizing",
-				Message: fmt.Sprintf("Finalizer operations for custom resource %s name were successfully accomplished", fdeployment.Name)})
-
-			flog.Info("Update 3 before")
-			err = r.Status().Update(ctx, fdeployment)
-			flog.Info("Update 3 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to update fdeployment status 2")
-				// log.Error(err, "Failed to update fdeployment status")
-				return ctrl.Result{}, err
-			}
-
-			flog.Info("Removing Finalizer for fdeployment after successfully perform the operations")
-			// log.Info("Removing Finalizer for fdeployment after successfully perform the operations")
-			if ok := controllerutil.RemoveFinalizer(fdeployment, fdeploymentFinalizer); !ok {
-				flog.Info(err, "Failed to remove finalizer for fdeployment")
-				// log.Error(err, "Failed to remove finalizer for fdeployment")
-				return ctrl.Result{Requeue: true}, nil
-			}
-
-			flog.Info("Update 4 before")
-			err = r.Update(ctx, fdeployment)
-			flog.Info("Update 4 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to remove finalizer for fdeployment")
-				// log.Error(err, "Failed to remove finalizer for fdeployment")
-				return ctrl.Result{}, err
-			}
+	if !f.DeletionTimestamp.IsZero() {
+		if controllerutil.RemoveFinalizer(f, fdeploymentFinalizer) {
+			return ctrl.Result{}, r.Update(ctx, f)
 		}
 		return ctrl.Result{}, nil
 	}
-
-	foundServiceAccount := &corev1.ServiceAccount{}
-
-	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, foundServiceAccount)
-	if err != nil && apierrors.IsNotFound(err) {
-		// Define a new ServiceAccount object
-		svcAcc, err := r.serviceAccountForFDeployment(fdeployment)
-		if err != nil {
-			flog.Info(err, "Failed to define new ServiceAccount resource for fdeployment")
-
-			// The following implementation will update the status
-			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
-				Status: metav1.ConditionFalse, Reason: "Reconciling",
-				Message: fmt.Sprintf("Failed to create ServiceAccount for the custom resource (%s): (%s)", fdeployment.Name, err)})
-
-			flog.Info("Update 5 before")
-			err := r.Status().Update(ctx, fdeployment)
-			flog.Info("Update 5 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to update fdeployment status 3")
+	if r.GatewayName == "" || r.GatewayNamespace == "" || r.GatewayListener == "" {
+		return ctrl.Result{}, fmt.Errorf("gateway name, namespace and listener must be configured")
+	}
+	if err := validateFdeployment(f); err != nil {
+		return ctrl.Result{}, r.setDeploymentStatus(ctx, f, false, "InvalidSpec", err.Error())
+	}
+	if err := r.dependenciesReady(ctx, f); err != nil {
+		if statusErr := r.setDeploymentStatus(ctx, f, false, "WaitingDependencies", err.Error()); statusErr != nil {
+			return ctrl.Result{}, statusErr
+		}
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	}
+	desired, err := r.deploymentForFDeployment(f)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	sa, err := r.serviceAccountForFDeployment(f)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	svc, err := r.serviceForFDeployment(f)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	route, err := r.routeForFDeployment(f)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	for _, obj := range []client.Object{sa, desired, svc, route} {
+		if err := r.reconcileOwned(ctx, f, obj); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+	deployment := &appsv1.Deployment{}
+	if err := r.Get(ctx, req.NamespacedName, deployment); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := r.Get(ctx, req.NamespacedName, route); err != nil {
+		return ctrl.Result{}, err
+	}
+	gateway := &gatewayv1.Gateway{}
+	err = r.Get(ctx, types.NamespacedName{Name: r.GatewayName, Namespace: r.GatewayNamespace}, gateway)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
+	ready := err == nil && gatewayReady(gateway, r.GatewayListener) && r.routeReady(route)
+	if ready && r.CleanupLegacyIngress {
+		legacy := &networking.Ingress{}
+		err := r.Get(ctx, req.NamespacedName, legacy)
+		if err == nil && metav1.IsControlledBy(legacy, f) {
+			if err := r.Delete(ctx, legacy); err != nil {
 				return ctrl.Result{}, err
 			}
-
+		} else if err != nil && !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		flog.Info("Creating a new ServiceAccount")
-
-		if err = r.Create(ctx, svcAcc); err != nil {
-			flog.Info(err, "Failed to create new ServiceAccount")
-			return ctrl.Result{}, err
-		}
-
-		// ServiceAccount created successfully
-		// We will requeue the reconciliation so that we can ensure the state
-		// and move forward for the next operations
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
-	} else if err != nil {
-		flog.Info(err, "Failed to get ServiceAccount")
+	}
+	ready = ready && deployment.Status.ObservedGeneration >= deployment.Generation && deployment.Status.AvailableReplicas >= f.Spec.Replicas && deployment.Status.UpdatedReplicas >= f.Spec.Replicas
+	reason, message := "Progressing", "Waiting for current Deployment, Gateway and HTTPRoute readiness"
+	if ready {
+		reason, message = "Ready", "Deployment and Gateway route are ready"
+	}
+	if err := r.setDeploymentStatus(ctx, f, ready, reason, message); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	// Check if the deployment already exists, if not create a new one
-	foundDeployment := &appsv1.Deployment{}
-	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, foundDeployment)
-	if err != nil && apierrors.IsNotFound(err) {
-		// Define a new deployment
-		dep, err := r.deploymentForFDeployment(fdeployment)
-		if err != nil {
-			flog.Info(err, "Failed to define new Deployment resource for fdeployment")
-			// log.Error(err, "Failed to define new Deployment resource for fdeployment")
-
-			// The following implementation will update the status
-			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
-				Status: metav1.ConditionFalse, Reason: "Reconciling",
-				Message: fmt.Sprintf("Failed to create Deployment for the custom resource (%s): (%s)", fdeployment.Name, err)})
-
-			flog.Info("Update 5 before")
-			err := r.Status().Update(ctx, fdeployment)
-			flog.Info("Update 5 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to update fdeployment status 3")
-				// log.Error(err, "Failed to update fdeployment status")
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{}, err
-		}
-		flog.Info("Creating a new Deployment")
-		// log.Info("Creating a new Deployment",
-		// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-
-		if err = r.Create(ctx, dep); err != nil {
-			flog.Info(err, "Failed to create new Deployment")
-			// log.Error(err, "Failed to create new Deployment",
-			// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-			return ctrl.Result{}, err
-		}
-
-		// Deployment created successfully
-		// We will requeue the reconciliation so that we can ensure the state
-		// and move forward for the next operations
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
-	} else if err != nil {
-		flog.Info(err, "Failed to get Deployment")
-		return ctrl.Result{}, err
-	}
-
-	// Check if the deployment already exists, if not create a new one
-	foundService := &corev1.Service{}
-	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, foundService)
-	if err != nil && apierrors.IsNotFound(err) {
-		// Define a new deployment
-		svc, err := r.serviceForFDeployment(fdeployment)
-		if err != nil {
-			flog.Info(err, "Failed to define new Service resource for fdeployment")
-			// log.Error(err, "Failed to define new Deployment resource for fdeployment")
-
-			// The following implementation will update the status
-			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
-				Status: metav1.ConditionFalse, Reason: "Reconciling",
-				Message: fmt.Sprintf("Failed to create Service for the custom resource (%s): (%s)", fdeployment.Name, err)})
-
-			flog.Info("Update 5 before")
-			err := r.Status().Update(ctx, fdeployment)
-			flog.Info("Update 5 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to update fdeployment status 3")
-				// log.Error(err, "Failed to update fdeployment status")
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{}, err
-		}
-		flog.Info("Creating a new Service")
-		// log.Info("Creating a new Deployment",
-		// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-
-		if err = r.Create(ctx, svc); err != nil {
-			flog.Info(err, "Failed to create new Service")
-			// log.Error(err, "Failed to create new Deployment",
-			// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-			return ctrl.Result{}, err
-		}
-
-		// Deployment created successfully
-		// We will requeue the reconciliation so that we can ensure the state
-		// and move forward for the next operations
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
-	} else if err != nil {
-		flog.Info(err, "Failed to get Deployment")
-		return ctrl.Result{}, err
-	}
-
-	// Check if the deployment already exists, if not create a new one
-	foundIngress := &networking.Ingress{}
-	err = r.Get(ctx, types.NamespacedName{Name: fdeployment.Name, Namespace: fdeployment.Namespace}, foundIngress)
-	if err != nil && apierrors.IsNotFound(err) {
-		// Define a new deployment
-		ing, err := r.ingressForFDeployment(fdeployment)
-		if err != nil {
-			flog.Info(err, "Failed to define new Ingress resource for fdeployment")
-			// log.Error(err, "Failed to define new Deployment resource for fdeployment")
-
-			// The following implementation will update the status
-			meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
-				Status: metav1.ConditionFalse, Reason: "Reconciling",
-				Message: fmt.Sprintf("Failed to create Ingress for the custom resource (%s): (%s)", fdeployment.Name, err)})
-
-			flog.Info("Update 5 before")
-			err := r.Status().Update(ctx, fdeployment)
-			flog.Info("Update 5 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to update fdeployment status 3")
-				// log.Error(err, "Failed to update fdeployment status")
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{}, err
-		}
-		flog.Info("Creating a new Ingress")
-		// log.Info("Creating a new Deployment",
-		// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-
-		if err = r.Create(ctx, ing); err != nil {
-			flog.Info(err, "Failed to create new Ingress")
-			// log.Error(err, "Failed to create new Deployment",
-			// 	"Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-			return ctrl.Result{}, err
-		}
-
-		// Deployment created successfully
-		// We will requeue the reconciliation so that we can ensure the state
-		// and move forward for the next operations
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
-	} else if err != nil {
-		flog.Info(err, "Failed to get Deployment")
-		return ctrl.Result{}, err
-	}
-
-	flog.Info("Got all resources")
-
-	foundDeployment.Spec.Replicas = &fdeployment.Spec.Replicas
-	foundDeployment.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort = fdeployment.Spec.Port
-
-	imageName := ""
-	if fdeployment.Spec.Image != "" {
-		imageName = fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Spec.Image, fdeployment.Spec.Tag)
-	} else {
-		imageName = fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
-	}
-
-	foundDeployment.Spec.Template.Spec.Containers[0].Image = imageName
-	foundDeployment.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Port = intstr.FromInt(int(fdeployment.Spec.Port))
-	foundDeployment.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Path = fdeployment.Spec.HealthCheck.ReadinessProbe.Path
-	foundDeployment.Spec.Template.Spec.Containers[0].LivenessProbe.HTTPGet.Port = intstr.FromInt(int(fdeployment.Spec.Port))
-	foundDeployment.Spec.Template.Spec.Containers[0].LivenessProbe.HTTPGet.Path = fdeployment.Spec.HealthCheck.LivenessProbe.Path
-	foundService.Spec.Ports[0].TargetPort = intstr.FromInt(int(fdeployment.Spec.Port))
-	foundIngress.Spec.Rules[0].Host = fdeployment.Spec.Host
-	foundIngress.Spec.Rules[0].HTTP.Paths[0].Path = fdeployment.Spec.Path
-	// resource limits and request
-	limitCpu := resource.MustParse(fdeployment.Spec.Resources.Limits.CPU)
-	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = resource.MustParse(fmt.Sprintf("%dm", limitCpu.MilliValue()))
-	limitMemory := resource.MustParse(fdeployment.Spec.Resources.Limits.Memory)
-	limitMemoryResource := resource.MustParse(fmt.Sprintf("%dMi", limitMemory.Value()/1048576))
-	limitMemoryResource.Format = resource.BinarySI
-	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory] = limitMemoryResource
-	requestCpu := resource.MustParse(fdeployment.Spec.Resources.Requests.CPU)
-	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse(fmt.Sprintf("%dm", requestCpu.MilliValue()))
-	requestMemory := resource.MustParse(fdeployment.Spec.Resources.Requests.Memory)
-	requestMemoryResource := resource.MustParse(fmt.Sprintf("%dMi", requestMemory.Value()/1048576))
-	requestMemoryResource.Format = resource.BinarySI
-	foundDeployment.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = requestMemoryResource
-
-	// update env
-	env, err := getEnvironment(fdeployment)
-	if err != nil {
-		flog.Info(err, "Failed to get environment")
-		return ctrl.Result{}, err
-	}
-	foundDeployment.Spec.Template.Spec.Containers[0].Env = env
-
-	spew.Dump(foundDeployment)
-	spew.Dump(foundDeployment.Spec.Template.Spec.Containers[0].Resources)
-
-	err = r.Update(ctx, foundDeployment)
-	if err != nil {
-		// spew.Dump(found)
-		flog.Info(err, "Failed to update Deployment (6)")
-		// log.Error(err, "Failed to update Deployment",
-		// 	"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
-
-		// The following implementation will update the status
-		meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
-			Status: metav1.ConditionFalse, Reason: "Resizing",
-			Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdeployment.Name, err)})
-
-		flog.Info("Update 7 before")
-		err := r.Status().Update(ctx, fdeployment)
-		flog.Info("Update 7 after")
-
-		if err != nil {
-			flog.Info(err, "Failed to update FDeployment status 4")
-			// log.Error(err, "Failed to update FDeployment status")
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, err
-	}
-	err = r.Update(ctx, foundService)
-	if err != nil {
-		// spew.Dump(found)
-		flog.Info(err, "Failed to update Service (6)")
-		// log.Error(err, "Failed to update Deployment",
-		// 	"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
-
-		// The following implementation will update the status
-		meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
-			Status: metav1.ConditionFalse, Reason: "Resizing",
-			Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdeployment.Name, err)})
-
-		flog.Info("Update 7 before")
-		err := r.Status().Update(ctx, fdeployment)
-		flog.Info("Update 7 after")
-
-		if err != nil {
-			flog.Info(err, "Failed to update FDeployment status 4")
-			// log.Error(err, "Failed to update FDeployment status")
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, err
-	}
-	err = r.Update(ctx, foundIngress)
-	if err != nil {
-		// spew.Dump(found)
-		flog.Info(err, "Failed to update Ingress (6)")
-		// log.Error(err, "Failed to update Deployment",
-		// 	"Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
-
-		// The following implementation will update the status
-		meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
-			Status: metav1.ConditionFalse, Reason: "Resizing",
-			Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdeployment.Name, err)})
-
-		flog.Info("Update 7 before")
-		err := r.Status().Update(ctx, fdeployment)
-		flog.Info("Update 7 after")
-
-		if err != nil {
-			flog.Info(err, "Failed to update FDeployment status 4")
-			// log.Error(err, "Failed to update FDeployment status")
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, err
-	}
-
-	// The following implementation will update the status
-	meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment,
-		Status: metav1.ConditionTrue, Reason: "Reconciling",
-		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", fdeployment.Name, fdeployment.Spec.Replicas)})
-
-	err = r.Status().Update(ctx, fdeployment)
-
-	if err != nil {
-		flog.Info(err, "Failed to update FDeployment status 5")
-		// log.Error(err, "Failed to update FDeployment status")
-		return ctrl.Result{}, err
-	}
-
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *FdeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&k8sv1.Fdeployment{}).
-		Owns(&corev1.ServiceAccount{}).
-		Owns(&corev1.Service{}).
-		Owns(&appsv1.Deployment{}).
-		Owns(&networking.Ingress{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 2}).
-		Complete(r)
+func (r *FdeploymentReconciler) setDeploymentStatus(ctx context.Context, f *k8sv1.Fdeployment, ready bool, reason, message string) error {
+	before := f.DeepCopy()
+	status := metav1.ConditionFalse
+	if ready {
+		status = metav1.ConditionTrue
+	}
+	meta.SetStatusCondition(&f.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment, Status: status, ObservedGeneration: f.Generation, Reason: reason, Message: message})
+	if equality.Semantic.DeepEqual(before.Status, f.Status) {
+		return nil
+	}
+	return r.Status().Patch(ctx, f, client.MergeFrom(before))
 }
 
-func (r *FdeploymentReconciler) setStatusToUnknown(ctx context.Context, fdeployment *k8sv1.Fdeployment, req reconcile.Request, log logr.Logger, flog utils.Log) error {
-	// if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
-	// 	flog.Info(err, "Failed to re-fetch fdeployment")
-	// 	// log.Error(err, "Failed to re-fetch fdeployment")
-	// 	return err
-	// }
-	// spew.Dump(fdeployment)
-	meta.SetStatusCondition(&fdeployment.Status.Conditions, metav1.Condition{Type: typeAvailableFDeployment, Status: metav1.ConditionUnknown, Reason: "Reconciling", Message: "Starting reconciliation"})
-
-	flog.Info("Update 8 before")
-	err := r.Status().Update(ctx, fdeployment)
-	flog.Info("Update 8 after")
+// Preserve API-assigned fields, immutable selectors, sidecars and annotations.
+// Refuse to adopt resources belonging to another owner.
+func (r *FdeploymentReconciler) reconcileOwned(ctx context.Context, f *k8sv1.Fdeployment, desired client.Object) error {
+	current := desired.DeepCopyObject().(client.Object)
+	err := r.Get(ctx, client.ObjectKeyFromObject(desired), current)
+	if apierrors.IsNotFound(err) {
+		return r.Create(ctx, desired)
+	}
 	if err != nil {
-		flog.Info(err, "Failed to update fdeployment status 6")
-		// log.Error(err, "Failed to update fdeployment status")
 		return err
 	}
-
-	// Let's re-fetch the fdeployment Custom Resource after update the status
-	// so that we have the latest state of the resource on the cluster and we will avoid
-	// raise the issue "the object has been modified, please apply
-	// your changes to the latest version and try again" which would re-trigger the reconciliation
-	// if we try to update it again in the following operations
-	// if err := r.Get(ctx, req.NamespacedName, fdeployment); err != nil {
-	// 	flog.Info(err, "Failed to re-fetch fdeployment")
-	// 	// log.Error(err, "Failed to re-fetch fdeployment")
-	// 	return err
-	// }
-	return nil
+	if !metav1.IsControlledBy(current, f) {
+		return fmt.Errorf("refusing to modify unowned %T %s", current, client.ObjectKeyFromObject(current))
+	}
+	before := current.DeepCopyObject().(client.Object)
+	switch c := current.(type) {
+	case *appsv1.Deployment:
+		d := desired.(*appsv1.Deployment)
+		c.Spec.Replicas = d.Spec.Replicas
+		// Existing releases included the version in their immutable selector.
+		// Keep its labels while updating the rest of the pod template.
+		labels := c.Spec.Selector.MatchLabels
+		d.Spec.Template.Labels = labels
+		containers := c.Spec.Template.Spec.Containers
+		found := false
+		for i := range containers {
+			if containers[i].Name == f.Name {
+				wanted := d.Spec.Template.Spec.Containers[0]
+				containers[i].Image = wanted.Image
+				containers[i].ImagePullPolicy = wanted.ImagePullPolicy
+				containers[i].Env = wanted.Env
+				containers[i].Ports = wanted.Ports
+				containers[i].Resources = wanted.Resources
+				containers[i].ReadinessProbe = wanted.ReadinessProbe
+				containers[i].LivenessProbe = wanted.LivenessProbe
+				containers[i].SecurityContext = wanted.SecurityContext
+				found = true
+			}
+		}
+		if !found {
+			containers = append(containers, d.Spec.Template.Spec.Containers[0])
+		}
+		c.Spec.Template.Spec.Containers = containers
+		c.Spec.Template.Labels = labels
+		c.Spec.Template.Spec.ServiceAccountName = d.Spec.Template.Spec.ServiceAccountName
+		c.Spec.Template.Spec.AutomountServiceAccountToken = d.Spec.Template.Spec.AutomountServiceAccountToken
+		c.Spec.Template.Spec.SecurityContext = d.Spec.Template.Spec.SecurityContext
+	case *corev1.Service:
+		d := desired.(*corev1.Service)
+		c.Spec.Selector = d.Spec.Selector
+		ports := d.Spec.Ports
+		for i := range ports {
+			for _, old := range c.Spec.Ports {
+				if old.Port == ports[i].Port {
+					ports[i].NodePort = old.NodePort
+				}
+			}
+		}
+		c.Spec.Ports = ports
+	case *corev1.ServiceAccount:
+		c.AutomountServiceAccountToken = desired.(*corev1.ServiceAccount).AutomountServiceAccountToken
+	case *gatewayv1.HTTPRoute:
+		c.Spec = desired.(*gatewayv1.HTTPRoute).Spec
+	}
+	if equality.Semantic.DeepEqual(current, before) {
+		return nil
+	}
+	return r.Patch(ctx, current, client.MergeFrom(before))
 }
 
-// finalizeMemcached will perform the required operations before delete the CR.
-func (r *FdeploymentReconciler) doFinalizerOperationsForFDeployment(cr *k8sv1.Fdeployment) {
-	// TODO(user): Add the cleanup steps that the operator
-	// needs to do before the CR can be deleted. Examples
-	// of finalizers include performing backups and deleting
-	// resources that are not owned by this CR, like a PVC.
-
-	// Note: It is not recommended to use finalizers with the purpose of delete resources which are
-	// created and managed in the reconciliation. These ones, such as the Deployment created on this reconcile,
-	// are defined as depended of the custom resource. See that we use the method ctrl.SetControllerReference.
-	// to set the ownerRef which means that the Deployment will be deleted by the Kubernetes API.
-	// More info: https://kubernetes.io/docs/tasks/administer-cluster/use-cascading-deletion/
-
-	// The following implementation will raise an event
-	// flog.Info("-----Deleting the Custom Resource")
-	// flog.Info(cr.Name)
-	// flog.Info(cr.Namespace)
-	// flog.Info(r.Recorder)
-	r.Recorder.Event(cr, "Warning", "Deleting",
-		fmt.Sprintf("Custom Resource %s is being deleted from the namespace %s",
-			cr.Name,
-			cr.Namespace))
-	// flog.Info("-----Deleting the Custom Resource2")
+func validatedResources(v k8sv1.FdeploymentResources) (corev1.ResourceRequirements, error) {
+	result := corev1.ResourceRequirements{Requests: corev1.ResourceList{}, Limits: corev1.ResourceList{}}
+	for _, entry := range []struct {
+		name           corev1.ResourceName
+		request, limit string
+	}{{corev1.ResourceCPU, v.Requests.CPU, v.Limits.CPU}, {corev1.ResourceMemory, v.Requests.Memory, v.Limits.Memory}} {
+		request, err := resource.ParseQuantity(entry.request)
+		if err != nil || request.Sign() <= 0 {
+			return result, fmt.Errorf("invalid positive %s request", entry.name)
+		}
+		limit, err := resource.ParseQuantity(entry.limit)
+		if err != nil || limit.Sign() <= 0 || request.Cmp(limit) > 0 {
+			return result, fmt.Errorf("invalid %s limit or request exceeds limit", entry.name)
+		}
+		result.Requests[entry.name], result.Limits[entry.name] = request, limit
+	}
+	return result, nil
+}
+func validateFdeployment(f *k8sv1.Fdeployment) error {
+	if _, err := validatedResources(f.Spec.Resources); err != nil {
+		return err
+	}
+	if f.Spec.Port < 1 || f.Spec.Port > 65535 || f.Spec.Replicas < 1 || f.Spec.Replicas > 5 {
+		return fmt.Errorf("invalid port or replicas")
+	}
+	if f.Spec.Host == "" || !strings.HasPrefix(f.Spec.Path, "/") || !strings.HasPrefix(f.Spec.HealthCheck.ReadinessProbe.Path, "/") || !strings.HasPrefix(f.Spec.HealthCheck.LivenessProbe.Path, "/") {
+		return fmt.Errorf("hostname and absolute route/probe paths required")
+	}
+	if f.Spec.Tag == "" || f.Spec.Tag == "latest" {
+		return fmt.Errorf("an explicit versioned image tag is required")
+	}
+	return nil
+}
+func (r *FdeploymentReconciler) routeForFDeployment(f *k8sv1.Fdeployment) (*gatewayv1.HTTPRoute, error) {
+	ns := gatewayv1.Namespace(r.GatewayNamespace)
+	section := gatewayv1.SectionName(r.GatewayListener)
+	pathType := gatewayv1.PathMatchPathPrefix
+	port := gatewayv1.PortNumber(80)
+	group := gatewayv1.Group(gatewayv1.GroupName)
+	kind := gatewayv1.Kind("Gateway")
+	backendGroup := gatewayv1.Group("")
+	backendKind := gatewayv1.Kind("Service")
+	weight := int32(1)
+	route := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: f.Name, Namespace: f.Namespace}, Spec: gatewayv1.HTTPRouteSpec{
+		CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Group: &group, Kind: &kind, Name: gatewayv1.ObjectName(r.GatewayName), Namespace: &ns, SectionName: &section}}},
+		Hostnames:       []gatewayv1.Hostname{gatewayv1.Hostname(f.Spec.Host)},
+		Rules:           []gatewayv1.HTTPRouteRule{{Matches: []gatewayv1.HTTPRouteMatch{{Path: &gatewayv1.HTTPPathMatch{Type: &pathType, Value: &f.Spec.Path}}}, BackendRefs: []gatewayv1.HTTPBackendRef{{BackendRef: gatewayv1.BackendRef{Weight: &weight, BackendObjectReference: gatewayv1.BackendObjectReference{Group: &backendGroup, Kind: &backendKind, Name: gatewayv1.ObjectName(f.Name), Port: &port}}}}}},
+	}}
+	return route, ctrl.SetControllerReference(f, route, r.Scheme)
+}
+func (r *FdeploymentReconciler) routeReady(route *gatewayv1.HTTPRoute) bool {
+	for _, parent := range route.Status.Parents {
+		ref := parent.ParentRef
+		namespace := route.Namespace
+		if ref.Namespace != nil {
+			namespace = string(*ref.Namespace)
+		}
+		if string(ref.Name) != r.GatewayName || namespace != r.GatewayNamespace || ref.SectionName == nil || string(*ref.SectionName) != r.GatewayListener || parent.ControllerName != "gateway.envoyproxy.io/gatewayclass-controller" {
+			continue
+		}
+		if ref.Group != nil && *ref.Group != gatewayv1.GroupName {
+			continue
+		}
+		if ref.Kind != nil && *ref.Kind != "Gateway" {
+			continue
+		}
+		if conditionReady(parent.Conditions, "Accepted", route.Generation) && conditionReady(parent.Conditions, "ResolvedRefs", route.Generation) {
+			return true
+		}
+	}
+	return false
+}
+func conditionReady(conditions []metav1.Condition, name string, generation int64) bool {
+	c := meta.FindStatusCondition(conditions, name)
+	return c != nil && c.Status == metav1.ConditionTrue && c.ObservedGeneration >= generation
+}
+func gatewayReady(g *gatewayv1.Gateway, listener string) bool {
+	if !conditionReady(g.Status.Conditions, "Accepted", g.Generation) || !conditionReady(g.Status.Conditions, "Programmed", g.Generation) {
+		return false
+	}
+	for _, l := range g.Status.Listeners {
+		if string(l.Name) == listener {
+			return conditionReady(l.Conditions, "Accepted", g.Generation) && conditionReady(l.Conditions, "Programmed", g.Generation) && conditionReady(l.Conditions, "ResolvedRefs", g.Generation)
+		}
+	}
+	return false
+}
+func (r *FdeploymentReconciler) dependenciesReady(ctx context.Context, f *k8sv1.Fdeployment) error {
+	for _, env := range f.Spec.Environments {
+		if env.FromSecret.Name != "" && env.Value == "" && env.FromConfig.Name == "" {
+			obj := &corev1.Secret{}
+			if err := r.Get(ctx, types.NamespacedName{Name: env.FromSecret.Name, Namespace: f.Namespace}, obj); err != nil {
+				return fmt.Errorf("Secret dependency %s unavailable", env.FromSecret.Name)
+			}
+			if _, ok := obj.Data[env.FromSecret.Key]; !ok {
+				return fmt.Errorf("Secret dependency key unavailable for %s", env.Name)
+			}
+		} else if env.FromConfig.Name != "" && env.Value == "" {
+			obj := &corev1.ConfigMap{}
+			if err := r.Get(ctx, types.NamespacedName{Name: env.FromConfig.Name, Namespace: f.Namespace}, obj); err != nil {
+				return fmt.Errorf("ConfigMap dependency %s unavailable", env.FromConfig.Name)
+			}
+			if _, ok := obj.Data[env.FromConfig.Key]; !ok {
+				return fmt.Errorf("ConfigMap dependency key unavailable for %s", env.Name)
+			}
+		}
+	}
+	return nil
+}
+func (r *FdeploymentReconciler) enqueueDependency(ctx context.Context, obj client.Object) []reconcile.Request {
+	list := &k8sv1.FdeploymentList{}
+	if err := r.List(ctx, list); err != nil {
+		return nil
+	}
+	result := []reconcile.Request{}
+	for _, f := range list.Items {
+		match := false
+		switch obj.(type) {
+		case *gatewayv1.Gateway:
+			match = obj.GetName() == r.GatewayName && obj.GetNamespace() == r.GatewayNamespace
+		case *corev1.Secret:
+			for _, env := range f.Spec.Environments {
+				if obj.GetNamespace() == f.Namespace && env.FromSecret.Name == obj.GetName() {
+					match = true
+				}
+			}
+		case *corev1.ConfigMap:
+			for _, env := range f.Spec.Environments {
+				if obj.GetNamespace() == f.Namespace && env.FromConfig.Name == obj.GetName() {
+					match = true
+				}
+			}
+		}
+		if match {
+			result = append(result, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&f)})
+		}
+	}
+	return result
+}
+func (r *FdeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	mapping := handler.EnqueueRequestsFromMapFunc(r.enqueueDependency)
+	return ctrl.NewControllerManagedBy(mgr).For(&k8sv1.Fdeployment{}).Owns(&corev1.ServiceAccount{}).Owns(&corev1.Service{}).Owns(&appsv1.Deployment{}).Owns(&gatewayv1.HTTPRoute{}).Watches(&gatewayv1.Gateway{}, mapping).Watches(&corev1.ConfigMap{}, mapping).Watches(&corev1.Secret{}, mapping).Complete(r)
 }
 
 func getEnvironment(fdeployment *k8sv1.Fdeployment) ([]corev1.EnvVar, error) {
@@ -664,7 +410,10 @@ func getEnvironment(fdeployment *k8sv1.Fdeployment) ([]corev1.EnvVar, error) {
 // deploymentForFDeployment returns a FDeployment Deployment object
 func (r *FdeploymentReconciler) deploymentForFDeployment(
 	fdeployment *k8sv1.Fdeployment) (*appsv1.Deployment, error) {
-	// path := fdeployment.Spec.Path
+	resources, err := validatedResources(fdeployment.Spec.Resources)
+	if err != nil {
+		return nil, err
+	}
 	replicas := fdeployment.Spec.Replicas
 	port := fdeployment.Spec.Port
 	name := fdeployment.Name
@@ -675,6 +424,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 		image = fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
 	}
 	ls := labelsForFDeployment(fdeployment.Name, image)
+	delete(ls, "app.kubernetes.io/version")
 
 	// create env vars
 	envVars, err := getEnvironment(fdeployment)
@@ -707,7 +457,8 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 					AutomountServiceAccountToken: &[]bool{false}[0],
 					ServiceAccountName:           name,
 					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: &[]bool{false}[0],
+						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+						RunAsNonRoot:   &fdeployment.Spec.Security.RunAsNonRoot,
 						// 	SeccompProfile: &corev1.SeccompProfile{
 						// 		Type: corev1.SeccompProfileTypeRuntimeDefault,
 						// 	},
@@ -737,7 +488,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 							},
 							PeriodSeconds:       20,
 							SuccessThreshold:    1,
-							TimeoutSeconds:      1,
+							TimeoutSeconds:      3,
 							InitialDelaySeconds: 5,
 						},
 						LivenessProbe: &corev1.Probe{
@@ -751,24 +502,26 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 							},
 							PeriodSeconds:       30,
 							SuccessThreshold:    1,
-							TimeoutSeconds:      1,
+							TimeoutSeconds:      3,
 							InitialDelaySeconds: 10,
 						},
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
-								"cpu":    resource.MustParse(fdeployment.Spec.Resources.Requests.CPU),
-								"memory": resource.MustParse(fdeployment.Spec.Resources.Requests.Memory),
+								"cpu":    resources.Requests[corev1.ResourceCPU],
+								"memory": resources.Requests[corev1.ResourceMemory],
 							},
 							Limits: corev1.ResourceList{
-								"cpu":    resource.MustParse(fdeployment.Spec.Resources.Limits.CPU),
-								"memory": resource.MustParse(fdeployment.Spec.Resources.Limits.Memory),
+								"cpu":    resources.Limits[corev1.ResourceCPU],
+								"memory": resources.Limits[corev1.ResourceMemory],
 							},
 						},
 
 						ImagePullPolicy: corev1.PullAlways,
 						SecurityContext: &corev1.SecurityContext{
-							RunAsNonRoot: &[]bool{false}[0],
-							Privileged:   &[]bool{true}[0],
+							RunAsNonRoot:             &fdeployment.Spec.Security.RunAsNonRoot,
+							Privileged:               &fdeployment.Spec.Security.Privileged,
+							AllowPrivilegeEscalation: &fdeployment.Spec.Security.Privileged,
+							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 							// 	RunAsUser:                &[]int64{1001}[0],
 							// 	AllowPrivilegeEscalation: &[]bool{false}[0],
 							// 	Capabilities: &corev1.Capabilities{
@@ -779,6 +532,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 						},
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: port,
+							Protocol:      corev1.ProtocolTCP,
 							Name:          "containerport",
 						}},
 						// Command: []string{"memcached", "-m=64", "-o", "modern", "-v"},
@@ -831,55 +585,6 @@ func (r *FdeploymentReconciler) serviceForFDeployment(
 	return svc, nil
 }
 
-// deploymentForFDeployment returns a FDeployment ingress object
-func (r *FdeploymentReconciler) ingressForFDeployment(
-	fdeployment *k8sv1.Fdeployment) (*networking.Ingress, error) {
-	path := fdeployment.Spec.Path
-	// replicas := fdeployment.Spec.Replicas
-	// port := fdeployment.Spec.Port
-	name := fdeployment.Name
-	host := fdeployment.Spec.Host
-	// image := fmt.Sprintf("ghcr.io/fabiokaelin/%s:%s", fdeployment.Name, fdeployment.Spec.Tag)
-	// ls := labelsForFDeployment(fdeployment.Name, image)
-
-	// ingress networking.k8s.io/v1
-	pathType := networking.PathTypePrefix
-	ing := &networking.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: fdeployment.Namespace,
-		},
-		Spec: networking.IngressSpec{
-			Rules: []networking.IngressRule{{
-				Host: host,
-				IngressRuleValue: networking.IngressRuleValue{
-					HTTP: &networking.HTTPIngressRuleValue{
-						Paths: []networking.HTTPIngressPath{{
-							Path:     path,
-							PathType: &pathType,
-							Backend: networking.IngressBackend{
-								Service: &networking.IngressServiceBackend{
-									Name: name,
-									Port: networking.ServiceBackendPort{
-										Number: 80,
-									},
-								},
-							},
-						}},
-					},
-				},
-			}},
-		},
-	}
-
-	// Set the ownerRef for the Deployment
-	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
-	if err := ctrl.SetControllerReference(fdeployment, ing, r.Scheme); err != nil {
-		return nil, err
-	}
-	return ing, nil
-}
-
 // deploymentForFDeployment returns a FDeployment Deployment object
 func (r *FdeploymentReconciler) serviceAccountForFDeployment(
 	fdeployment *k8sv1.Fdeployment) (*corev1.ServiceAccount, error) {
@@ -887,6 +592,7 @@ func (r *FdeploymentReconciler) serviceAccountForFDeployment(
 
 	//create service account
 	svcAcc := &corev1.ServiceAccount{
+		AutomountServiceAccountToken: &[]bool{false}[0],
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			// Namespace: app,
@@ -905,7 +611,7 @@ func (r *FdeploymentReconciler) serviceAccountForFDeployment(
 // labelsForFDeployment returns the labels for selecting the resources
 // More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/
 func labelsForFDeployment(name string, image string) map[string]string {
-	imageTag := strings.Split(image, ":")[1]
+	imageTag := image[strings.LastIndex(image, ":")+1:]
 	return map[string]string{
 		"app.kubernetes.io/name":     name,
 		"app.kubernetes.io/instance": name,

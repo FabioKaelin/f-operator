@@ -1,123 +1,37 @@
-# F-Operator
+# f-operator
 
-// TODO(user): Add simple overview of use/purpose
+Kubernetes operator for Fdeployment application workloads and Fdatabase resources. Application routing uses Gateway API HTTPRoutes attached to an infrastructure-owned Envoy Gateway. See [migration day runbook](docs/migration.md) and [release notes](docs/release-notes.md).
 
-## Ideas
+## Local development
 
-Run Privileged as option
+Use Go 1.26.8 or automatic toolchain selection. Run `make test` for controller unit tests and a real isolated Kubernetes API-server test with dummy resources. It starts local etcd/API-server processes on loopback; it does not read your kubeconfig or run any Kubernetes workloads on Minikube. `make build` compiles the manager. `make test-envoy` runs an isolated Docker network with standalone Envoy Gateway and dummy HTTP backends, then cleans up those temporary containers. Standalone mode is used only for debugging; production manifests use the Kubernetes provider.
 
-## Commands
+Do not run `make run` against your normal kubeconfig for debugging: it connects a real controller to the selected cluster. Use the isolated test harness instead. `make install` and `make deploy` mutate the selected cluster and are for a separately authorized migration day.
 
-### Create a new CRD
-
-```sh
-kubebuilder create api --group k8s --version v1 --kind Fdatabase --resource --controller
-```
-
-## Notes
-
-### Testing
-
-To update the code and the CRD after updating the API run  `make generate manifests`
-
-To add the CRD and run the Controller localy run  `make install run`
-
-## Description
-
-// TODO(user): An in-depth paragraph about your project and overview of use
-
-## Getting Started
-
-You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
-**Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
-
-### Running on the cluster
-
-1. Install Instances of Custom Resources:
-
-    ```sh
-    kubectl apply -f config/samples/
-    ```
-
-2. Build and push your image to the location specified by `IMG`:
-
-    ```sh
-    make docker-build docker-push IMG=<some-registry>/f-operator:tag
-    ```
-
-3. Deploy the controller to the cluster with the image specified by `IMG`:
-
-    ```sh
-    make deploy IMG=<some-registry>/f-operator:tag
-    ```
-
-### Uninstall CRDs
-
-To delete the CRDs from the cluster:
+On the Pi, run checks sequentially with a hard memory cap rather than starting unconstrained builds:
 
 ```sh
-make uninstall
+systemd-run --user --scope -p MemoryMax=1200M -p MemorySwapMax=0 -p CPUQuota=100% env GOMAXPROCS=1 GOMEMLIMIT=700MiB GOFLAGS=-p=1 make test
+systemd-run --user --scope -p MemoryMax=1200M -p MemorySwapMax=0 -p CPUQuota=100% env GOMAXPROCS=1 GOMEMLIMIT=700MiB GOFLAGS=-p=1 make build
 ```
 
-### Undeploy controller
+The local Envoy test containers have individual hard memory and CPU limits with swap disabled (768MiB combined maximum). Release image builds run on GitHub runners.
 
-UnDeploy the controller from the cluster:
+## Configuration
 
-```sh
-make undeploy
-```
+Manager flags:
 
-## Contributing
+- `--gateway-name=f-operator`
+- `--gateway-namespace=envoy-gateway-system`
+- `--gateway-listener=http`
+- `--cleanup-legacy-ingress=false`: explicit post-cutover cleanup gate; only owned Ingresses with current route/Gateway readiness are deleted.
 
-// TODO(user): Add detailed information on how you would like others to contribute to this project
+Fdeployment retains its host, path, image/tag, port, resource and health-check fields. Host and PathPrefix route to the same-named Service on port 80. Use versioned image tags; resource requests/limits must be valid positive quantities with requests no greater than limits. `security.privileged` defaults false; `security.runAsNonRoot` can be enabled for compatible images. All applications disable token automount and default to dropped capabilities/RuntimeDefault seccomp. Dedicated ServiceAccounts are created automatically. Available means current Deployment replicas and the configured Gateway/listener/HTTPRoute are ready.
 
-### How it works
+Fdatabase-created PVCs survive CR deletion. Existing independent StatefulSets are never taken over or duplicated. Review the runbook before using retained database volumes.
 
-This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
+## Release
 
-It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
-which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
+Pushes and pull requests run validation. Semver tags `vX.Y.Z` additionally build ARM64/AMD64 images, publish to GHCR, and create a GitHub release with a digest-pinned install.yaml, image.txt, gateway configuration archive, migration runbook and SHA256SUMS. There is no deployment job and no cluster credentials in this workflow. The default next version is 0.2.0. Never reuse published tags.
 
-### Test It Out
-
-1. Install the CRDs into the cluster:
-
-    ```sh
-    make install
-    ```
-
-1. Run your controller (this will run in the foreground, so switch to a new terminal if you want to leave it running):
-
-    ```sh
-    make run
-    ```
-
-**NOTE:** You can also run this in one step by running: `make install run`
-
-### Modifying the API definitions
-
-If you are editing the API definitions, generate the manifests such as CRs or CRDs using:
-
-```sh
-make manifests
-```
-
-**NOTE:** Run `make --help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2023.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-[http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0)
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Pinned infrastructure manifests live in `config/gateway`. The public TLS proxy and certificate renewal remain host-managed. Internal Tipp traffic stays internal. Popeye is optional read-only audit tooling; it is not installed by the operator.

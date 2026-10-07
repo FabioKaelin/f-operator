@@ -35,6 +35,7 @@ import (
 
 	k8sv1 "github.com/fabiokaelin/f-operator/api/k8s/v1"
 	k8scontroller "github.com/fabiokaelin/f-operator/internal/controller/k8s"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -47,6 +48,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(k8sv1.AddToScheme(scheme))
+	utilruntime.Must(gatewayv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -54,6 +56,12 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var gatewayName, gatewayNamespace, gatewayListener string
+	var cleanupLegacy bool
+	flag.StringVar(&gatewayName, "gateway-name", "f-operator", "Shared Gateway name")
+	flag.StringVar(&gatewayNamespace, "gateway-namespace", "envoy-gateway-system", "Shared Gateway namespace")
+	flag.StringVar(&gatewayListener, "gateway-listener", "http", "Gateway listener name")
+	flag.BoolVar(&cleanupLegacy, "cleanup-legacy-ingress", false, "Delete owned legacy Ingresses after explicit traffic cutover and route readiness")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -96,15 +104,18 @@ func main() {
 	}
 
 	if err = (&k8scontroller.FdeploymentReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		GatewayName: gatewayName, GatewayNamespace: gatewayNamespace, GatewayListener: gatewayListener, CleanupLegacyIngress: cleanupLegacy,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("f-operator"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Fdeployment")
 		os.Exit(1)
 	}
 	if err = (&k8scontroller.FdatabaseReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("f-operator"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Fdatabase")
 		os.Exit(1)
