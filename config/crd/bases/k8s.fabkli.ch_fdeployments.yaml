@@ -180,11 +180,20 @@ spec:
                   FdeploymentSecurity allows explicit compatibility exceptions for application images.
                   Root images remain supported; blanket privilege is disabled by default.
                 properties:
+                  nginxCompatibility:
+                    description: |-
+                      NginxCompatibility permits a root master to initialize files and switch workers
+                      to the nginx user without granting privileged container access.
+                    type: boolean
                   privileged:
                     type: boolean
                   runAsNonRoot:
                     type: boolean
                 type: object
+                x-kubernetes-validations:
+                - message: nginxCompatibility requires the standard root master process
+                  rule: '!has(self.nginxCompatibility) || !self.nginxCompatibility
+                    || !has(self.runAsNonRoot) || !self.runAsNonRoot'
               tag:
                 type: string
             required:

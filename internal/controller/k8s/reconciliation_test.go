@@ -236,3 +236,57 @@ func TestDatabaseRetainsPVCAndAvoidsSecondWriter(t *testing.T) {
 		t.Fatal("PVC lost on delete")
 	}
 }
+
+func TestNginxCompatibilityReconciliation(t *testing.T) {
+	f := dummyDeployment()
+	r := newTestReconciler(t, f)
+	runReconcile(t, r, f)
+	dep := &appsv1.Deployment{}
+	key := client.ObjectKeyFromObject(f)
+	if err := r.Get(context.Background(), key, dep); err != nil {
+		t.Fatal(err)
+	}
+	if len(dep.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities.Add) != 0 {
+		t.Fatal("default grants capabilities")
+	}
+	if err := r.Get(context.Background(), key, f); err != nil {
+		t.Fatal(err)
+	}
+	f.Spec.Security.NginxCompatibility = true
+	if err := r.Update(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	runReconcile(t, r, f)
+	if err := r.Get(context.Background(), key, dep); err != nil {
+		t.Fatal(err)
+	}
+	security := dep.Spec.Template.Spec.Containers[0].SecurityContext
+	if len(security.Capabilities.Add) != 4 || *security.Privileged || *security.AllowPrivilegeEscalation || *security.RunAsNonRoot || *dep.Spec.Template.Spec.AutomountServiceAccountToken {
+		t.Fatal("NGINX profile is missing or grants excess privilege")
+	}
+	f.Spec.Security.RunAsNonRoot = true
+	if validateFdeployment(f) == nil {
+		t.Fatal("accepted conflicting security options")
+	}
+	f.Spec.Security.RunAsNonRoot = false
+	f.Spec.Security.NginxCompatibility = false
+	if err := r.Update(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	runReconcile(t, r, f)
+	if err := r.Get(context.Background(), key, dep); err != nil {
+		t.Fatal(err)
+	}
+	if len(dep.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities.Add) != 0 {
+		t.Fatal("capability exception was not removed")
+	}
+}
+
+func TestExistingLatestFrontendRemainsCompatible(t *testing.T) {
+	f := dummyDeployment()
+	f.Spec.Tag = "latest"
+	f.Spec.Security.NginxCompatibility = true
+	if err := validateFdeployment(f); err != nil {
+		t.Fatal(err)
+	}
+}

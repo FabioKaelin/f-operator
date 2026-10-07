@@ -13,3 +13,5 @@ Envoy Gateway routing and operator safety improvements, prepared for a later mig
 This release does not install Envoy or deploy the operator. The pipeline has no deployment job or cluster credentials. Read migration.md before migration day. New security defaults can require an explicit application compatibility exception. Existing independent StatefulSets are not taken over.
 
 Release publishing uses the existing CR_PAT repository secret for the existing GHCR package, with GITHUB_TOKEN as a fallback. The v0.2.0 tag built successfully but publication was rejected by package permissions; v0.2.1 includes this authentication correction. No v0.2.0 GitHub release was published.
+
+Version 0.2.2 adds explicit security.nginxCompatibility for standard frontend NGINX root-master images, validates conflicting nonroot settings, and tests actual container startup/HTTP behavior. Existing development latest tags remain accepted so this upgrade does not silently block current deployments. Apply the new CRD and frontend security settings before starting this operator; see docs/nginx-compatibility.md.
