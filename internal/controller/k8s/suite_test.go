@@ -117,6 +117,25 @@ func TestIsolatedManager(t *testing.T) {
 	if condition == nil || condition.Status != metav1.ConditionFalse {
 		t.Fatal("reported ready without gateway or running workload")
 	}
+	// The real CRD admits the scoped option and rejects an incompatible root policy.
+	securityBad := dummyDeployment()
+	securityBad.Name = "invalid-security"
+	securityBad.UID = ""
+	securityBad.Spec.Security.NginxCompatibility = true
+	securityBad.Spec.Security.RunAsNonRoot = true
+	if err := c.Create(ctx, securityBad); err == nil {
+		t.Fatal("CRD admitted conflicting NGINX/nonroot settings")
+	}
+	securityBad.Spec.Security.RunAsNonRoot = false
+	if err := c.Create(ctx, securityBad); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(securityBad), securityBad); err != nil {
+		t.Fatal(err)
+	}
+	if !securityBad.Spec.Security.NginxCompatibility {
+		t.Fatal("CRD pruned NGINX compatibility option")
+	}
 	// A missing Gateway becomes Ready after current gateway/route/workload status.
 	g := &gatewayv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "gateway"}, Spec: gatewayv1.GatewaySpec{GatewayClassName: "envoy", Listeners: []gatewayv1.Listener{{Name: "http", Port: 80, Protocol: gatewayv1.HTTPProtocolType}}}}
 	if err := c.Create(ctx, g); err != nil {

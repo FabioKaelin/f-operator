@@ -26,12 +26,12 @@ Manager flags:
 - `--gateway-listener=http`
 - `--cleanup-legacy-ingress=false`: explicit post-cutover cleanup gate; only owned Ingresses with current route/Gateway readiness are deleted.
 
-Fdeployment retains its host, path, image/tag, port, resource and health-check fields. Host and PathPrefix route to the same-named Service on port 80. Use versioned image tags; resource requests/limits must be valid positive quantities with requests no greater than limits. `security.privileged` defaults false; `security.runAsNonRoot` can be enabled for compatible images. All applications disable token automount and default to dropped capabilities/RuntimeDefault seccomp. Dedicated ServiceAccounts are created automatically. Available means current Deployment replicas and the configured Gateway/listener/HTTPRoute are ready.
+Fdeployment retains its host, path, image/tag, port, resource and health-check fields. Host and PathPrefix route to the same-named Service on port 80. Use versioned image tags when available; existing development `latest` tags remain accepted for compatibility. Resource requests/limits must be valid positive quantities with requests no greater than limits. `security.nginxCompatibility=true` adds only CHOWN, SETUID, SETGID and NET_BIND_SERVICE for standard root-master NGINX images; leave `runAsNonRoot=false` and `privileged=false`. See [frontend rollout](docs/nginx-compatibility.md). `security.privileged` defaults false; `security.runAsNonRoot` can be enabled for compatible images. All applications disable token automount and default to dropped capabilities/RuntimeDefault seccomp. Dedicated ServiceAccounts are created automatically. Available means current Deployment replicas and the configured Gateway/listener/HTTPRoute are ready.
 
 Fdatabase-created PVCs survive CR deletion. Existing independent StatefulSets are never taken over or duplicated. Review the runbook before using retained database volumes.
 
 ## Release
 
-Pushes and pull requests run validation. Semver tags `vX.Y.Z` additionally build ARM64/AMD64 images, publish to GHCR, and create a GitHub release with a digest-pinned install.yaml, image.txt, gateway configuration archive, migration runbook and SHA256SUMS. There is no deployment job and no cluster credentials in this workflow. The default version is 0.2.1. Never reuse published tags.
+Pushes and pull requests run validation. Semver tags `vX.Y.Z` additionally build ARM64/AMD64 images, publish to GHCR, and create a GitHub release with a digest-pinned install.yaml, image.txt, gateway configuration archive, migration runbook and SHA256SUMS. There is no deployment job and no cluster credentials in this workflow. The default version is 0.2.2. Never reuse published tags.
 
 Pinned infrastructure manifests live in `config/gateway`. The public TLS proxy and certificate renewal remain host-managed. Internal Tipp traffic stays internal. Popeye is optional read-only audit tooling; it is not installed by the operator.

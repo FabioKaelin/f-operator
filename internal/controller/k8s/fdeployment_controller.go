@@ -231,6 +231,9 @@ func validatedResources(v k8sv1.FdeploymentResources) (corev1.ResourceRequiremen
 	return result, nil
 }
 func validateFdeployment(f *k8sv1.Fdeployment) error {
+	if f.Spec.Security.NginxCompatibility && f.Spec.Security.RunAsNonRoot {
+		return fmt.Errorf("nginxCompatibility requires the standard root master process")
+	}
 	if _, err := validatedResources(f.Spec.Resources); err != nil {
 		return err
 	}
@@ -240,8 +243,8 @@ func validateFdeployment(f *k8sv1.Fdeployment) error {
 	if f.Spec.Host == "" || !strings.HasPrefix(f.Spec.Path, "/") || !strings.HasPrefix(f.Spec.HealthCheck.ReadinessProbe.Path, "/") || !strings.HasPrefix(f.Spec.HealthCheck.LivenessProbe.Path, "/") {
 		return fmt.Errorf("hostname and absolute route/probe paths required")
 	}
-	if f.Spec.Tag == "" || f.Spec.Tag == "latest" {
-		return fmt.Errorf("an explicit versioned image tag is required")
+	if f.Spec.Tag == "" {
+		return fmt.Errorf("an image tag is required")
 	}
 	return nil
 }
@@ -521,7 +524,7 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 							RunAsNonRoot:             &fdeployment.Spec.Security.RunAsNonRoot,
 							Privileged:               &fdeployment.Spec.Security.Privileged,
 							AllowPrivilegeEscalation: &fdeployment.Spec.Security.Privileged,
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+							Capabilities:             applicationCapabilities(fdeployment.Spec.Security),
 							// 	RunAsUser:                &[]int64{1001}[0],
 							// 	AllowPrivilegeEscalation: &[]bool{false}[0],
 							// 	Capabilities: &corev1.Capabilities{
@@ -618,4 +621,14 @@ func labelsForFDeployment(name string, image string) map[string]string {
 		"app.kubernetes.io/version":  imageTag,
 		"app.kubernetes.io/part-of":  "f-operator",
 	}
+}
+
+// Standard NGINX starts a root master, initializes cache ownership, then drops
+// worker UID/GID. Keep all other capabilities dropped and privilege escalation off.
+func applicationCapabilities(security k8sv1.FdeploymentSecurity) *corev1.Capabilities {
+	result := &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}
+	if security.NginxCompatibility {
+		result.Add = []corev1.Capability{"CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE"}
+	}
+	return result
 }

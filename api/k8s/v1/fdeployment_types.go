@@ -57,9 +57,13 @@ type FdeploymentSpec struct {
 
 // FdeploymentSecurity allows explicit compatibility exceptions for application images.
 // Root images remain supported; blanket privilege is disabled by default.
+// +kubebuilder:validation:XValidation:rule="!has(self.nginxCompatibility) || !self.nginxCompatibility || !has(self.runAsNonRoot) || !self.runAsNonRoot",message="nginxCompatibility requires the standard root master process"
 type FdeploymentSecurity struct {
-	Privileged   bool `json:"privileged,omitempty"`
-	RunAsNonRoot bool `json:"runAsNonRoot,omitempty"`
+	// NginxCompatibility permits a root master to initialize files and switch workers
+	// to the nginx user without granting privileged container access.
+	NginxCompatibility bool `json:"nginxCompatibility,omitempty"`
+	Privileged         bool `json:"privileged,omitempty"`
+	RunAsNonRoot       bool `json:"runAsNonRoot,omitempty"`
 }
 
 type FdeploymentHealthCheck struct {

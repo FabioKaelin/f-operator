@@ -23,6 +23,7 @@ jobs:
       - run: make test
       - run: make build
       - run: make test-envoy
+      - run: python3 hack/test-nginx.py --image nginx:stable --image nginx:stable-alpine
       - run: git diff --exit-code
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -70,10 +71,11 @@ jobs:
           printf '%s\n' "ghcr.io/fabiokaelin/f-operator@${IMAGE_DIGEST}" > dist/image.txt
           cp -r config/gateway dist/gateway
           cp docs/migration.md dist/migration.md
+          cp docs/nginx-compatibility.md dist/nginx-compatibility.md
           tar -czf dist/gateway-config.tar.gz -C dist gateway
-          (cd dist && sha256sum install.yaml image.txt gateway-config.tar.gz migration.md > SHA256SUMS)
+          (cd dist && sha256sum install.yaml image.txt gateway-config.tar.gz migration.md nginx-compatibility.md > SHA256SUMS)
       - name: Publish release artifacts
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/install.yaml dist/image.txt dist/gateway-config.tar.gz dist/migration.md dist/SHA256SUMS --title "f-operator $GITHUB_REF_NAME" --notes-file docs/release-notes.md
+        run: gh release create "$GITHUB_REF_NAME" dist/install.yaml dist/image.txt dist/gateway-config.tar.gz dist/migration.md dist/nginx-compatibility.md dist/SHA256SUMS --title "f-operator $GITHUB_REF_NAME" --notes-file docs/release-notes.md
 # Deliberately no cluster credentials, kubectl apply, deployment job or automatic rollout.
