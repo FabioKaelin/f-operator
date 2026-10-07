@@ -29,7 +29,7 @@ Only the security fields change in these files. Do not blindly apply their histo
 ## Migration-day order (not executed during preparation)
 
 1. Download/verify the operator release artifacts, save old CRD/operator manifests and current Fdeployment specs. Prepare Envoy infrastructure as described in migration.md. Do not deploy v0.2.1 against these frontend images.
-2. Apply only the updated Fdeployment CRD first, from the checked-out v0.2.2 tag: `kubectl --context minikube apply -f config/crd/bases/k8s.fabkli.ch_fdeployments.yaml`. Wait for the CRD Established condition. This makes the new security field persist before starting the new controller.
+2. Save the old operator replica count and pause its Deployment before changing the CRD/CRs. This prevents an older controller from dropping unknown spec fields during an update. Existing application pods and ingress keep running; reconciliation is temporarily paused. On migration day only: `kubectl --context minikube -n f-operator-system scale deployment f-operator-controller-manager --replicas=0`. Wait for its old controller pod to terminate. Then apply only the updated Fdeployment CRD first, from the checked-out v0.2.2 tag: `kubectl --context minikube apply -f config/crd/bases/k8s.fabkli.ch_fdeployments.yaml`. Wait for the CRD Established condition. This makes the new security field persist before starting the new controller.
 3. For the four currently deployed frontend resources, patch only security fields, preserving their image tags, replicas, resource budgets and environment. Commands below are for migration day only:
 
    ```sh
@@ -40,7 +40,7 @@ Only the security fields change in these files. Do not blindly apply their histo
    ```
 
    Read the CRs back and confirm nginxCompatibility persists. Do not create media/prod-frontend merely because a source manifest exists.
-4. Deploy the digest-pinned v0.2.2-or-later operator install.yaml with legacy Ingress cleanup disabled. This controller applies the capability profile to frontend Deployments. Confirm new pod security settings, no startup errors, ready probes, frontend HTML and static assets, and API requests through original and Envoy routes. Complete public HTTPS/LAN checks before traffic cutover or legacy cleanup.
+4. Deploy the digest-pinned v0.2.2-or-later operator install.yaml with legacy Ingress cleanup disabled. The release restores the operator replica and starts the new controller. This controller applies the capability profile to frontend Deployments. Confirm new pod security settings, no startup errors, ready probes, frontend HTML and static assets, and API requests through original and Envoy routes. Complete public HTTPS/LAN checks before traffic cutover or legacy cleanup.
 5. Merge the prepared frontend manifest PRs at the coordinated rollout time, accounting for their automatic image-build/deploy workflows and selected versions. Future frontend deploys then retain the option. Do not merge solely to update documentation while deployment is deferred.
 
 ## Local evidence and verification limits
