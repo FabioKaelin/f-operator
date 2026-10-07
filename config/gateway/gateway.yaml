@@ -16,6 +16,16 @@ spec:
             limits: {cpu: 500m, memory: 256Mi}
       envoyService:
         type: NodePort
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - name: http-80
+                  port: 80
+                  protocol: TCP
+                  targetPort: 10080
+                  nodePort: 30492
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
