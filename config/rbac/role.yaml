@@ -8,18 +8,10 @@ rules:
   - ""
   resources:
   - configmaps
-  - persistentvolumeclaims
-  - pods
   - secrets
-  - serviceaccounts
-  - services
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - ""
@@ -29,12 +21,51 @@ rules:
   - create
   - patch
 - apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - apps
   resources:
   - deployments
   verbs:
   - create
-  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - httproutes
+  verbs:
+  - create
   - get
   - list
   - patch
@@ -46,8 +77,6 @@ rules:
   - fdatabases
   - fdeployments
   verbs:
-  - create
-  - delete
   - get
   - list
   - patch
@@ -74,10 +103,7 @@ rules:
   resources:
   - ingresses
   verbs:
-  - create
   - delete
   - get
   - list
-  - patch
-  - update
   - watch

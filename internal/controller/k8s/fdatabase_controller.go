@@ -1,347 +1,159 @@
-/*
-Copyright 2023.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package k8s
 
 import (
 	"context"
 	"fmt"
-	"time"
-
+	k8sv1 "github.com/fabiokaelin/f-operator/api/k8s/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	k8sv1 "github.com/fabiokaelin/f-operator/api/k8s/v1"
-	"github.com/fabiokaelin/f-operator/internal/utils"
-	"github.com/go-logr/logr"
+	"time"
 )
 
-// FdatabaseReconciler reconciles a Fdatabase object
 type FdatabaseReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 }
 
-const (
-	typeAvailableFDatabase = "Available"
-	typeDegradedFDatabase  = "Degraded"
-)
-
 const fdatabaseFinalizer = "k8s.fabkli.ch/finalizer"
 
-//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=k8s.fabkli.ch,resources=fdatabases/finalizers,verbs=update
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=services;serviceaccounts;pods;secrets;configmaps;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete;
+//+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch
 
 func (r *FdatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	fmt.Println("|||||||||||||||||||||||||||||||||||||||||||||||||")
-	log := log.FromContext(ctx)
-	flog := utils.Init()
-	r.Recorder = record.NewFakeRecorder(100)
-
-	// i need: PVC, Service, Deployment
-
-	fdatabase := &k8sv1.Fdatabase{}
-	err := r.Get(ctx, req.NamespacedName, fdatabase)
+	f := &k8sv1.Fdatabase{}
+	if err := r.Get(ctx, req.NamespacedName, f); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	pvc := &corev1.PersistentVolumeClaim{}
+	err := r.Get(ctx, req.NamespacedName, pvc)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
+	// Remove only this CR's old owner reference, preserving storage and other metadata.
+	if err == nil && metav1.IsControlledBy(pvc, f) {
+		before := pvc.DeepCopy()
+		refs := []metav1.OwnerReference{}
+		for _, ref := range pvc.OwnerReferences {
+			if ref.UID != f.UID {
+				refs = append(refs, ref)
+			}
+		}
+		pvc.OwnerReferences = refs
+		if err := r.Patch(ctx, pvc, client.MergeFrom(before)); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+	if !f.DeletionTimestamp.IsZero() {
+		if controllerutil.RemoveFinalizer(f, fdatabaseFinalizer) {
+			return ctrl.Result{}, r.Update(ctx, f)
+		}
+		return ctrl.Result{}, nil
+	}
+	// Never start a second writer beside an independently managed StatefulSet.
+	sts := &appsv1.StatefulSet{}
+	err = r.Get(ctx, req.NamespacedName, sts)
+	if err == nil {
+		return ctrl.Result{}, r.databaseStatus(ctx, f, false, "ExternalDatabase", "Existing StatefulSet is independently managed; no Deployment created")
+	}
+	if !apierrors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
+	desired, err := r.deploymentForFDatabase(f)
 	if err != nil {
+		return ctrl.Result{}, err
+	}
+	svc, err := r.serviceForFDatabase(f)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if pvc.Name == "" {
+		pvc, err = r.pvcForFDatabase(f)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if err := r.Create(ctx, pvc); err != nil {
+			return ctrl.Result{}, err
+		}
+	} else if !metav1.IsControlledBy(pvc, f) && pvc.Labels["app.kubernetes.io/part-of"] != "f-operator" {
+		return ctrl.Result{}, fmt.Errorf("refusing to use unrelated PVC %s", pvc.Name)
+	}
+	for _, obj := range []client.Object{svc, desired} {
+		current := obj.DeepCopyObject().(client.Object)
+		err := r.Get(ctx, client.ObjectKeyFromObject(obj), current)
 		if apierrors.IsNotFound(err) {
-			flog.Info("fdatabase resource not found. Ignoring since object must be deleted")
-			return ctrl.Result{}, nil
-		}
-		flog.Info(err, "Failed to get fdatabase")
-		return ctrl.Result{}, err
-	}
-	{
-		// !Let's just set the status as Unknown when no status are available
-		if fdatabase.Status.Conditions == nil || len(fdatabase.Status.Conditions) == 0 {
-			err := r.setStatusToUnknown(ctx, fdatabase, req, log, flog)
-			if err != nil {
+			if err := r.Create(ctx, obj); err != nil {
 				return ctrl.Result{}, err
 			}
+			continue
 		}
-		if !controllerutil.ContainsFinalizer(fdatabase, fdatabaseFinalizer) {
-			flog.Info("Adding Finalizer for fdatabase")
-			if ok := controllerutil.AddFinalizer(fdatabase, fdatabaseFinalizer); !ok {
-				flog.Info(err, "Failed to add finalizer into the custom resource")
-				return ctrl.Result{Requeue: true}, nil
-			}
-			flog.Info("Update 1 before")
-			err = r.Update(ctx, fdatabase)
-			flog.Info("Update 1 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to update custom resource to add finalizer")
-				return ctrl.Result{}, err
-			}
+		if err != nil {
+			return ctrl.Result{}, err
 		}
-		isFDatabaseMarkedToBeDeleted := fdatabase.GetDeletionTimestamp() != nil
-		if isFDatabaseMarkedToBeDeleted {
-			if controllerutil.ContainsFinalizer(fdatabase, fdatabaseFinalizer) {
-				flog.Info("Performing Finalizer Operations for fdatabase before delete CR")
-				meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeDegradedFDatabase,
-					Status: metav1.ConditionUnknown, Reason: "Finalizing",
-					Message: fmt.Sprintf("Performing finalizer operations for the custom resource: %s ", fdatabase.Name)})
-				flog.Info("Update 2 before")
-				err := r.Status().Update(ctx, fdatabase)
-				flog.Info("Update 2 after")
-				if err != nil {
-					flog.Info(err, "Failed to update fdatabase status 1")
-					return ctrl.Result{}, err
+		if !metav1.IsControlledBy(current, f) {
+			return ctrl.Result{}, fmt.Errorf("refusing to modify unowned database resource %s", current.GetName())
+		}
+		if dep, ok := current.(*appsv1.Deployment); ok {
+			before := dep.DeepCopy()
+			found := false
+			for i := range dep.Spec.Template.Spec.Containers {
+				if dep.Spec.Template.Spec.Containers[i].Name == f.Name {
+					dep.Spec.Template.Spec.Containers[i].Env = desired.Spec.Template.Spec.Containers[0].Env
+					found = true
 				}
-				r.doFinalizerOperationsForFDatabase(fdatabase)
-
-				meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeDegradedFDatabase,
-					Status: metav1.ConditionTrue, Reason: "Finalizing",
-					Message: fmt.Sprintf("Finalizer operations for custom resource %s name were successfully accomplished", fdatabase.Name)})
-
-				flog.Info("Update 3 before")
-				err = r.Status().Update(ctx, fdatabase)
-				flog.Info("Update 3 after")
-
-				if err != nil {
-					flog.Info(err, "Failed to update fdatabase status 2")
-					return ctrl.Result{}, err
-				}
-
-				flog.Info("Removing Finalizer for fdatabase after successfully perform the operations")
-				if ok := controllerutil.RemoveFinalizer(fdatabase, fdatabaseFinalizer); !ok {
-					flog.Info(err, "Failed to remove finalizer for fdatabase")
-					return ctrl.Result{Requeue: true}, nil
-				}
-
-				flog.Info("Update 4 before")
-				err = r.Update(ctx, fdatabase)
-				flog.Info("Update 4 after")
-
-				if err != nil {
-					flog.Info(err, "Failed to remove finalizer for fdatabase")
+			}
+			if !found {
+				return ctrl.Result{}, fmt.Errorf("database container missing")
+			}
+			dep.Spec.Strategy = desired.Spec.Strategy
+			dep.Spec.Template.Spec.AutomountServiceAccountToken = desired.Spec.Template.Spec.AutomountServiceAccountToken
+			if !equality.Semantic.DeepEqual(before, dep) {
+				if err := r.Patch(ctx, dep, client.MergeFrom(before)); err != nil {
 					return ctrl.Result{}, err
 				}
 			}
-			return ctrl.Result{}, nil
 		}
 	}
-
-	foundPVC := &corev1.PersistentVolumeClaim{}
-	err = r.Get(ctx, types.NamespacedName{Name: fdatabase.Name, Namespace: fdatabase.Namespace}, foundPVC)
-	if err != nil && apierrors.IsNotFound(err) {
-		pvc, err := r.pvcForFDatabase(fdatabase)
-		if err != nil {
-			flog.Info(err, "Failed to define new pvc resource for fdatabase")
-
-			// The following implementation will update the status
-			meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeAvailableFDatabase,
-				Status: metav1.ConditionFalse, Reason: "Reconciling",
-				Message: fmt.Sprintf("Failed to create pvc for the custom resource (%s): (%s)", fdatabase.Name, err)})
-
-			flog.Info("Update 5 before")
-			err := r.Status().Update(ctx, fdatabase)
-			flog.Info("Update 5 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to update fdatabase status 3")
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{}, err
-		}
-		flog.Info("Creating a new pvc")
-
-		if err = r.Create(ctx, pvc); err != nil {
-			flog.Info(err, "Failed to create new pvc")
-			return ctrl.Result{}, err
-		}
-
-		// pvc created successfully
-		// We will requeue the reconciliation so that we can ensure the state
-		// and move forward for the next operations
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
-	} else if err != nil {
-		flog.Info(err, "Failed to get pvc")
+	dep := &appsv1.Deployment{}
+	if err := r.Get(ctx, req.NamespacedName, dep); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	foundDeployment := &appsv1.Deployment{}
-	err = r.Get(ctx, types.NamespacedName{Name: fdatabase.Name, Namespace: fdatabase.Namespace}, foundDeployment)
-	if err != nil && apierrors.IsNotFound(err) {
-		deployment, err := r.deploymentForFDatabase(fdatabase)
-		if err != nil {
-			flog.Info(err, "Failed to define new deployment resource for fdatabase")
-
-			// The following implementation will update the status
-			meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeAvailableFDatabase,
-				Status: metav1.ConditionFalse, Reason: "Reconciling",
-				Message: fmt.Sprintf("Failed to create for the custom resource (%s): (%s)", fdatabase.Name, err)})
-
-			flog.Info("Update 5 before")
-			err := r.Status().Update(ctx, fdatabase)
-			flog.Info("Update 5 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to update fdatabase status 3")
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{}, err
-		}
-		flog.Info("Creating a new deployment")
-
-		if err = r.Create(ctx, deployment); err != nil {
-			flog.Info(err, "Failed to create new deployment")
-			return ctrl.Result{}, err
-		}
-
-		// deployment created successfully
-		// We will requeue the reconciliation so that we can ensure the state
-		// and move forward for the next operations
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
-	} else if err != nil {
-		flog.Info(err, "Failed to get deployment")
-		return ctrl.Result{}, err
+	ready := dep.Status.ObservedGeneration >= dep.Generation && dep.Status.AvailableReplicas == 1
+	reason := "Progressing"
+	if ready {
+		reason = "Ready"
 	}
-
-	foundService := &corev1.Service{}
-	err = r.Get(ctx, types.NamespacedName{Name: fdatabase.Name, Namespace: fdatabase.Namespace}, foundService)
-	if err != nil && apierrors.IsNotFound(err) {
-		svc, err := r.serviceForFDatabase(fdatabase)
-		if err != nil {
-			flog.Info(err, "Failed to define new Service resource for fdatabase")
-
-			// The following implementation will update the status
-			meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeAvailableFDatabase,
-				Status: metav1.ConditionFalse, Reason: "Reconciling",
-				Message: fmt.Sprintf("Failed to create Service for the custom resource (%s): (%s)", fdatabase.Name, err)})
-
-			flog.Info("Update 5 before")
-			err := r.Status().Update(ctx, fdatabase)
-			flog.Info("Update 5 after")
-
-			if err != nil {
-				flog.Info(err, "Failed to update fdatabase status 3")
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{}, err
-		}
-		flog.Info("Creating a new Service")
-
-		if err = r.Create(ctx, svc); err != nil {
-			flog.Info(err, "Failed to create new Service")
-			return ctrl.Result{}, err
-		}
-
-		// service created successfully
-		// We will requeue the reconciliation so that we can ensure the state
-		// and move forward for the next operations
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
-	} else if err != nil {
-		flog.Info(err, "Failed to get service")
-		return ctrl.Result{}, err
-	}
-
-	environment, err := getEnv(fdatabase)
-	if err != nil {
-		flog.Info(err, "Failed to get environment variables")
-		return ctrl.Result{}, err
-	}
-
-	foundDeployment.Spec.Template.Spec.Containers[0].Env = environment
-
-	err = r.Update(ctx, foundDeployment)
-	if err != nil {
-		flog.Info(err, "Failed to update Deployment (6)")
-		meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeAvailableFDatabase,
-			Status: metav1.ConditionFalse, Reason: "Resizing",
-			Message: fmt.Sprintf("Failed to update the size for the custom resource (%s): (%s)", fdatabase.Name, err)})
-
-		flog.Info("Update 7 before")
-		err := r.Status().Update(ctx, fdatabase)
-		flog.Info("Update 7 after")
-
-		if err != nil {
-			flog.Info(err, "Failed to update FDatabase status 4")
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, err
-	}
-
-	// The following implementation will update the status
-	meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeAvailableFDatabase,
-		Status: metav1.ConditionTrue, Reason: "Reconciling",
-		Message: fmt.Sprintf("Deployment for custom resource (%s) with %d replicas created successfully", fdatabase.Name, 1)})
-
-	err = r.Status().Update(ctx, fdatabase)
-
-	if err != nil {
-		flog.Info(err, "Failed to update FDatabase status 5")
-		return ctrl.Result{}, err
-	}
-
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: 30 * time.Second}, r.databaseStatus(ctx, f, ready, reason, "Database workload readiness; PVC retained on CR deletion")
 }
-
-// SetupWithManager sets up the controller with the Manager.
+func (r *FdatabaseReconciler) databaseStatus(ctx context.Context, f *k8sv1.Fdatabase, ready bool, reason, message string) error {
+	before := f.DeepCopy()
+	status := metav1.ConditionFalse
+	if ready {
+		status = metav1.ConditionTrue
+	}
+	meta.SetStatusCondition(&f.Status.Conditions, metav1.Condition{Type: "Available", Status: status, ObservedGeneration: f.Generation, Reason: reason, Message: message})
+	if equality.Semantic.DeepEqual(before.Status, f.Status) {
+		return nil
+	}
+	return r.Status().Patch(ctx, f, client.MergeFrom(before))
+}
 func (r *FdatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&k8sv1.Fdatabase{}).
-		Owns(&corev1.Service{}).
-		Owns(&appsv1.Deployment{}).
-		Owns(&corev1.PersistentVolumeClaim{}).
-		Complete(r)
+	return ctrl.NewControllerManagedBy(mgr).For(&k8sv1.Fdatabase{}).Owns(&corev1.Service{}).Owns(&appsv1.Deployment{}).Complete(r)
 }
-
-func (r *FdatabaseReconciler) setStatusToUnknown(ctx context.Context, fdatabase *k8sv1.Fdatabase, req reconcile.Request, log logr.Logger, flog utils.Log) error {
-
-	meta.SetStatusCondition(&fdatabase.Status.Conditions, metav1.Condition{Type: typeAvailableFDatabase, Status: metav1.ConditionUnknown, Reason: "Reconciling", Message: "Starting reconciliation"})
-
-	flog.Info("Update 8 before")
-	err := r.Status().Update(ctx, fdatabase)
-	flog.Info("Update 8 after")
-	if err != nil {
-		flog.Info(err, "Failed to update fdatabase status 6")
-		return err
-	}
-	return nil
-}
-
-func (r *FdatabaseReconciler) doFinalizerOperationsForFDatabase(cr *k8sv1.Fdatabase) {
-	r.Recorder.Event(cr, "Warning", "Deleting",
-		fmt.Sprintf("Custom Resource %s is being deleted from the namespace %s",
-			cr.Name,
-			cr.Namespace))
-}
-
 func (r *FdatabaseReconciler) pvcForFDatabase(fdatabase *k8sv1.Fdatabase) (*corev1.PersistentVolumeClaim, error) {
 	name := fdatabase.Name
 	storaceClassName := "standard"
@@ -366,9 +178,7 @@ func (r *FdatabaseReconciler) pvcForFDatabase(fdatabase *k8sv1.Fdatabase) (*core
 			},
 		},
 	}
-	if err := ctrl.SetControllerReference(fdatabase, pvc, r.Scheme); err != nil {
-		return nil, err
-	}
+	// PVCs intentionally have no owner reference: CR deletion must retain data.
 	return pvc, nil
 }
 
@@ -391,6 +201,7 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
+			Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
 			Selector: &metav1.LabelSelector{
 				MatchLabels: ls,
 			},
@@ -399,6 +210,7 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
+					AutomountServiceAccountToken: &[]bool{false}[0],
 					Containers: []corev1.Container{{
 						Name:            name,
 						Image:           "mariadb:11",
@@ -410,12 +222,12 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 						Env: environment,
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
-								"cpu":    resource.MustParse("128Mi"),
-								"memory": resource.MustParse("50m"),
+								"cpu":    resource.MustParse("50m"),
+								"memory": resource.MustParse("128Mi"),
 							},
 							Limits: corev1.ResourceList{
-								"cpu":    resource.MustParse("1024Mi"),
-								"memory": resource.MustParse("200m"),
+								"cpu":    resource.MustParse("500m"),
+								"memory": resource.MustParse("1Gi"),
 							},
 						},
 						SecurityContext: &corev1.SecurityContext{

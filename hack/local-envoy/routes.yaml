@@ -1,0 +1,61 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: dummy}
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: dummy}
+spec:
+  gatewayClassName: dummy
+  listeners:
+    - {name: http, protocol: HTTP, port: 8888}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: backend}
+spec:
+  parentRefs: [{name: dummy, sectionName: http}]
+  hostnames: [dummy.example]
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /api}
+      backendRefs:
+        - {group: gateway.envoyproxy.io, kind: Backend, name: backend}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: frontend}
+spec:
+  parentRefs: [{name: dummy, sectionName: http}]
+  hostnames: [dummy.example]
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /}
+      backendRefs:
+        - {group: gateway.envoyproxy.io, kind: Backend, name: frontend}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata: {name: backend}
+spec:
+  endpoints:
+    - fqdn: {hostname: dummy-backend, port: 3000}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata: {name: frontend}
+spec:
+  endpoints:
+    - fqdn: {hostname: dummy-frontend, port: 3000}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata: {name: dummy}
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: Gateway, name: dummy}
+  clientIPDetection:
+    xForwardedFor: {numTrustedHops: 1}
+  scheme: Preserve

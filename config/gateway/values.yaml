@@ -1,0 +1,12 @@
+# Envoy Gateway v1.9.2. Helm is the single owner of Gateway API + Envoy CRDs.
+crds:
+  enabled: true
+global:
+  images:
+    envoyProxy:
+      image: envoyproxy/envoy:distroless-v1.39.2@sha256:dced08cf7c472e1a1d067f906878266078eeeb63c110b4961882c039a622853a
+deployment:
+  envoyGateway:
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: 500m, memory: 512Mi}
