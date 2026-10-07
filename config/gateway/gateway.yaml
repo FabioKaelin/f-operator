@@ -68,3 +68,19 @@ spec:
     xForwardedFor:
       numTrustedHops: 1
   scheme: Preserve
+---
+# Preserve the old ingress idle-timeout behavior without Envoy's short total timeout.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: application-timeouts
+  namespace: envoy-gateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: f-operator
+  timeout:
+    http:
+      requestTimeout: 0s
+      streamIdleTimeout: 60s

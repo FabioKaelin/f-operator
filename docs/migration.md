@@ -23,6 +23,9 @@ References: [Envoy compatibility](https://gateway.envoyproxy.io/news/releases/ma
    kubectl --context minikube apply -f config/gateway/grafana-route.yaml
    ```
 
+If monitoring migration is deferred, omit grafana-route.yaml and retain Grafana’s
+legacy Ingress and the ingress controller until that separate migration.
+
 5. Inspect GatewayClass Accepted, Gateway Accepted/Programmed and listener conditions. Discover the generated data-plane Service and its HTTP NodePort using owning-gateway labels. Do not confuse the controller Service with this Service. Review allowed route namespaces before adding new apps. Keep NodePort off the public internet.
 6. Apply the digest-pinned release install.yaml only on migration day, with cleanup-legacy-ingress=false (default). Wait for operator readiness, then every HTTPRoute parent Accepted/ResolvedRefs at current generation, workload replicas and endpoints.
 
@@ -30,7 +33,11 @@ References: [Envoy compatibility](https://gateway.envoyproxy.io/news/releases/ma
 
 Host NGINX/Certbot retain TLS, renewal and HTTP-to-HTTPS redirects. Change only application upstreams from http://192.168.49.2 to the selected http://192.168.49.2:NODEPORT after testing. Keep API-server, Jellyfin, phpMyAdmin and unrelated host routes unchanged. Back up files and run nginx -t before reload. Keep forwarded Host, X-Real-IP, X-Forwarded-For, X-Forwarded-Proto, X-Forwarded-Host and X-Forwarded-Port; Envoy trusts one forwarding hop. The trusted-hop model requires NodePort exposure restricted to the host/internal network.
 
-Test each original Host header through NodePort first, including /api and / on shared hosts, /api/child, /apix, query strings, backend-specific health content, forwarded scheme, WebSockets and uploads/timeouts. A frontend 200 at a backend health URL is not proof of backend health. Compare the original paths and response bodies. Verify public HTTPS with valid TLS and redirects, then test from an independent LAN client. Review default Envoy timeout behavior against real application long-running requests before cutover.
+Test each original Host header through NodePort first, including /api and / on shared hosts, /api/child, /apix, query strings, backend-specific health content, forwarded scheme, WebSockets and uploads/timeouts. A frontend 200 at a backend health URL is not proof of backend health. Compare the original paths and response bodies. Verify public HTTPS with valid TLS and redirects, then test from an independent LAN client. The supplied BackendTrafficPolicy disables the total upstream response timeout and
+sets a 60-second stream idle timeout to preserve the previous ingress idle-timeout
+behavior. Host NGINX retains its 60-second proxy read timeout. Validate long-running
+requests and uploads before cutover; a 17-second response and WebSocket message echo
+were verified in the recorded live migration.
 
 Keep tipp.internal.fabkli.ch internal: do not add it to public host NGINX or public DNS/router exposure. Update the Pi cronjob's internal endpoint to the data-plane NodePort while preserving its Host header. Inspect cronjob configuration separately; do not silently make it public.
 

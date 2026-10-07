@@ -30,9 +30,10 @@ Only the security fields change in these files. Do not blindly apply their histo
 
 1. Download/verify the operator release artifacts, save old CRD/operator manifests and current Fdeployment specs. Prepare Envoy infrastructure as described in migration.md. Do not deploy v0.2.1 against these frontend images.
 2. Save the old operator replica count and pause its Deployment before changing the CRD/CRs. This prevents an older controller from dropping unknown spec fields during an update. Existing application pods and ingress keep running; reconciliation is temporarily paused. On migration day only: `kubectl --context minikube -n f-operator-system scale deployment f-operator-controller-manager --replicas=0`. Wait for its old controller pod to terminate. Then apply only the updated Fdeployment CRD first, from the checked-out v0.2.2 tag: `kubectl --context minikube apply -f config/crd/bases/k8s.fabkli.ch_fdeployments.yaml`. Wait for the CRD Established condition. This makes the new security field persist before starting the new controller.
-3. For the four currently deployed frontend resources, patch only security fields, preserving their image tags, replicas, resource budgets and environment. Commands below are for migration day only:
+3. For the five currently deployed NGINX resources (including Keys), patch only security fields, preserving their image tags, replicas, resource budgets and environment. Commands below are for migration day only:
 
    ```sh
+   kubectl --context minikube -n keys patch fdeployment keys --type=merge -p '{"spec":{"security":{"nginxCompatibility":true,"privileged":false,"runAsNonRoot":false}}}'
    kubectl --context minikube -n tipp patch fdeployment dev-frontend --type=merge -p '{"spec":{"security":{"nginxCompatibility":true,"privileged":false,"runAsNonRoot":false}}}'
    kubectl --context minikube -n tipp patch fdeployment prod-frontend --type=merge -p '{"spec":{"security":{"nginxCompatibility":true,"privileged":false,"runAsNonRoot":false}}}'
    kubectl --context minikube -n media patch fdeployment dev-frontend --type=merge -p '{"spec":{"security":{"nginxCompatibility":true,"privileged":false,"runAsNonRoot":false}}}'
@@ -55,3 +56,7 @@ On 2026-10-07 all four live ARM64 image digests were tested sequentially in stan
 Use `python3 hack/test-nginx.py --image IMAGE@DIGEST` to repeat bounded startup/HTTP checks. CI also tests nginx:stable and nginx:stable-alpine. Controller tests verify opt-in, opt-out, retained restrictions and rejection of conflicting nonroot settings. These tests do not establish live cluster rollout, complete frontend/browser behavior or future image compatibility. Retest changed images. No cluster manifests were applied during preparation.
 
 Rollback: retain the old controller image and live Fdeployment specs; restoring the previous operator reverts to its prior behavior. Keep legacy ingress serving until cutover is verified. Preserve data/PVCs. Avoid rolling back to v0.2.1 with these standard NGINX images.
+
+Live migration follow-up: Keys also uses a root-master NGINX image. Its compatibility
+option was applied and its replacement pod and HTTP response verified during the
+2026-10-07 rollout. See [migration results](live-migration-2026-10-07.md).
