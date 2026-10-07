@@ -3,7 +3,7 @@ FROM --platform=$BUILDPLATFORM golang:1.26.8 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
-LABEL org.opencontainers.image.source https://github.com/fabiokaelin/f-operator
+LABEL org.opencontainers.image.source=https://github.com/fabiokaelin/f-operator
 
 WORKDIR /workspace
 # Copy the Go Modules manifests

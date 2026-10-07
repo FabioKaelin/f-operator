@@ -42,7 +42,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.CR_PAT || secrets.GITHUB_TOKEN }}
       - name: Version
         id: version
         shell: bash
