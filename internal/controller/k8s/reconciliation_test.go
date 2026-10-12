@@ -290,3 +290,56 @@ func TestExistingLatestFrontendRemainsCompatible(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSuspensionPriorityAndRecoveryPreserveDesiredReplicas(t *testing.T) {
+	ctx := context.Background()
+	f := dummyDeployment()
+	f.Spec.Replicas = 2
+	f.Spec.PriorityClassName = "fabkli-tipp-prod"
+	r := newTestReconciler(t, f)
+	runReconcile(t, r, f)
+	dep := &appsv1.Deployment{}
+	key := client.ObjectKeyFromObject(f)
+	if err := r.Get(ctx, key, dep); err != nil {
+		t.Fatal(err)
+	}
+	if dep.Spec.Template.Spec.PriorityClassName != f.Spec.PriorityClassName || *dep.Spec.Replicas != 2 {
+		t.Fatal("priority or replica count missing")
+	}
+	if err := r.Get(ctx, key, f); err != nil {
+		t.Fatal(err)
+	}
+	f.Spec.Suspend = true
+	if err := r.Update(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+	runReconcile(t, r, f)
+	if err := r.Get(ctx, key, dep); err != nil {
+		t.Fatal(err)
+	}
+	if *dep.Spec.Replicas != 0 {
+		t.Fatal("suspension overridden by reconciliation")
+	}
+	runReconcile(t, r, f)
+	if err := r.Get(ctx, key, f); err != nil {
+		t.Fatal(err)
+	}
+	if f.Spec.Replicas != 2 {
+		t.Fatal("desired replicas lost")
+	}
+	if c := meta.FindStatusCondition(f.Status.Conditions, "Available"); c == nil || c.Reason != "Suspended" {
+		t.Fatal("suspension not reported")
+	}
+	f.Spec.Suspend = false
+	f.Spec.PriorityClassName = "fabkli-foauth"
+	if err := r.Update(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+	runReconcile(t, r, f)
+	if err := r.Get(ctx, key, dep); err != nil {
+		t.Fatal(err)
+	}
+	if *dep.Spec.Replicas != 2 || dep.Spec.Template.Spec.PriorityClassName != "fabkli-foauth" {
+		t.Fatal("resume failed")
+	}
+}
