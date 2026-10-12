@@ -55,3 +55,18 @@ class GuardTests(unittest.TestCase):
         guard=Guard(api,{})
         self.assertFalse(guard.suspend({'metadata':{'resourceVersion':'1'}},{},{'name':'app','apps':[['fdeployments','app','web']],'databases':[['statefulsets','app','db']]}))
         self.assertEqual(api.actions,[])
+
+    def test_api_reloads_rotated_projected_token(self):
+        import tempfile,io
+        from pathlib import Path
+        from guard import API as RealAPI
+        class Opener:
+            def __init__(self):self.tokens=[]
+            def open(self,request,timeout):
+                self.tokens.append(request.get_header('Authorization'))
+                return io.BytesIO(b'{}')
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'token';path.write_text('first-fixture')
+            api=object.__new__(RealAPI);api.base='https://k8s.invalid';api.token_path=path;api.opener=Opener()
+            api.call('/test');path.write_text('rotated-fixture');api.call('/test')
+            self.assertEqual(api.opener.tokens,['Bearer first-fixture','Bearer rotated-fixture'])

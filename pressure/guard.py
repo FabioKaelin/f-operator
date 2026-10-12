@@ -14,11 +14,11 @@ STATE_NAME='pressure-state'
 class API:
     def __init__(self):
         directory=Path('/var/run/secrets/kubernetes.io/serviceaccount')
-        self.token=(directory/'token').read_text().strip()
+        self.token_path=directory/'token'
         self.base='https://'+os.environ['KUBERNETES_SERVICE_HOST']+':'+os.environ.get('KUBERNETES_SERVICE_PORT_HTTPS','443')
         self.opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=str(directory/'ca.crt'))))
     def call(self,path,method='GET',body=None):
-        headers={'Authorization':'Bearer '+self.token,'Content-Type':'application/merge-patch+json' if method=='PATCH' else 'application/json'}
+        headers={'Authorization':'Bearer '+self.token_path.read_text().strip(),'Content-Type':'application/merge-patch+json' if method=='PATCH' else 'application/json'}
         request=urllib.request.Request(self.base+path,headers=headers,method=method,data=json.dumps(body).encode() if body is not None else None)
         with self.opener.open(request,timeout=8) as response:
             data=response.read(4*1024*1024+1)
