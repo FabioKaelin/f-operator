@@ -1,0 +1,33 @@
+name: Deploy workload pressure policy
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pressure-policy-production
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 -m unittest discover -s pressure -p 'test_*.py'
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-kube
+        with:
+          kube_pwd: ${{ secrets.KUBE_PWD }}
+      - run: |
+          kubectl apply -f pressure/priorities.json
+          python3 pressure/apply-priorities.py
+          state=$(kubectl get configmap pressure-state -n f-operator-system --ignore-not-found -o name)
+          if [ -z "$state" ]; then
+            kubectl create configmap pressure-state -n f-operator-system --from-literal='state.json={}'
+          fi
+          python3 pressure/render.py > /tmp/pressure.json
+          kubectl apply -f /tmp/pressure.json
+          python3 pressure/wait-ready.py deployment/pressure-guard f-operator-system
