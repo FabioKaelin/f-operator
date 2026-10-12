@@ -9,6 +9,24 @@ spec:
     kubernetes:
       envoyDeployment:
         replicas: 1
+        # Avoid restarting ingress during brief Pi load or runtime stalls.
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: envoy
+                      livenessProbe:
+                        timeoutSeconds: 5
+                        failureThreshold: 24
+                      readinessProbe:
+                        timeoutSeconds: 5
+                    - name: shutdown-manager
+                      livenessProbe:
+                        timeoutSeconds: 5
+                        failureThreshold: 24
         container:
           image: envoyproxy/envoy:distroless-v1.39.2@sha256:dced08cf7c472e1a1d067f906878266078eeeb63c110b4961882c039a622853a
           resources:

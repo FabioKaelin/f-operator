@@ -1,0 +1,204 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-shortcuts"
+      },
+      "value": 1000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-random-minecraft"
+      },
+      "value": 2000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-homarr"
+      },
+      "value": 3000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-bazarr"
+      },
+      "value": 4000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-prowlarr"
+      },
+      "value": 5000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-sabnzbd"
+      },
+      "value": 6000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-tipp-dev"
+      },
+      "value": 7000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-fmedias"
+      },
+      "value": 8000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-sonarr"
+      },
+      "value": 9000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-radarr"
+      },
+      "value": 10000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-seerr"
+      },
+      "value": 11000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-f-home"
+      },
+      "value": 12000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-grafana-ui"
+      },
+      "value": 13000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-jellyfin"
+      },
+      "value": 14000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-f-image"
+      },
+      "value": 15000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-foauth"
+      },
+      "value": 16000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-tipp-prod"
+      },
+      "value": 17000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Owner-ordered priority; graceful pressure guard handles application/database grouping."
+    },
+    {
+      "apiVersion": "scheduling.k8s.io/v1",
+      "kind": "PriorityClass",
+      "metadata": {
+        "name": "fabkli-infrastructure"
+      },
+      "value": 100000,
+      "globalDefault": false,
+      "preemptionPolicy": "Never",
+      "description": "Protect routing, monitoring collection, pressure guard and control-plane support."
+    }
+  ]
+}

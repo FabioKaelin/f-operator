@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,8 +119,11 @@ func (r *FdeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, err
 		}
 	}
-	ready = ready && deployment.Status.ObservedGeneration >= deployment.Generation && deployment.Status.AvailableReplicas >= f.Spec.Replicas && deployment.Status.UpdatedReplicas >= f.Spec.Replicas
+	ready = ready && !f.Spec.Suspend && deployment.Status.ObservedGeneration >= deployment.Generation && deployment.Status.AvailableReplicas >= f.Spec.Replicas && deployment.Status.UpdatedReplicas >= f.Spec.Replicas
 	reason, message := "Progressing", "Waiting for current Deployment, Gateway and HTTPRoute readiness"
+	if f.Spec.Suspend {
+		reason, message = "Suspended", "Application suspended for pressure management; data and desired replicas retained"
+	}
 	if ready {
 		reason, message = "Ready", "Deployment and Gateway route are ready"
 	}
@@ -186,6 +190,8 @@ func (r *FdeploymentReconciler) reconcileOwned(ctx context.Context, f *k8sv1.Fde
 		}
 		c.Spec.Template.Spec.Containers = containers
 		c.Spec.Template.Labels = labels
+		c.Spec.Template.Spec.PriorityClassName = d.Spec.Template.Spec.PriorityClassName
+		c.Spec.Template.Spec.TerminationGracePeriodSeconds = d.Spec.Template.Spec.TerminationGracePeriodSeconds
 		c.Spec.Template.Spec.ServiceAccountName = d.Spec.Template.Spec.ServiceAccountName
 		c.Spec.Template.Spec.AutomountServiceAccountToken = d.Spec.Template.Spec.AutomountServiceAccountToken
 		c.Spec.Template.Spec.SecurityContext = d.Spec.Template.Spec.SecurityContext
@@ -231,6 +237,9 @@ func validatedResources(v k8sv1.FdeploymentResources) (corev1.ResourceRequiremen
 	return result, nil
 }
 func validateFdeployment(f *k8sv1.Fdeployment) error {
+	if f.Spec.PriorityClassName != "" && len(validation.IsDNS1123Subdomain(f.Spec.PriorityClassName)) != 0 {
+		return fmt.Errorf("invalid priorityClassName")
+	}
 	if f.Spec.Security.NginxCompatibility && f.Spec.Security.RunAsNonRoot {
 		return fmt.Errorf("nginxCompatibility requires the standard root master process")
 	}
@@ -418,6 +427,9 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 		return nil, err
 	}
 	replicas := fdeployment.Spec.Replicas
+	if fdeployment.Spec.Suspend {
+		replicas = 0
+	}
 	port := fdeployment.Spec.Port
 	name := fdeployment.Name
 	image := ""
@@ -455,6 +467,8 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
+					PriorityClassName:             fdeployment.Spec.PriorityClassName,
+					TerminationGracePeriodSeconds: &[]int64{120}[0],
 					// automountServiceAccountToken: false
 
 					AutomountServiceAccountToken: &[]bool{false}[0],

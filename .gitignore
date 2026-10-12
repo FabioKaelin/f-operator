@@ -28,3 +28,5 @@ Dockerfile.cross
 
 main
 main.exe
+**/__pycache__/
+*.pyc

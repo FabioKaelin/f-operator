@@ -20,6 +20,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - run: python3 -m unittest discover -s pressure -p 'test_*.py'
       - run: make test
       - run: make build
       - run: make test-envoy
@@ -30,6 +31,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      image_digest: ${{ steps.image.outputs.digest }}
     permissions:
       contents: write
       packages: write
@@ -78,4 +81,31 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/install.yaml dist/image.txt dist/gateway-config.tar.gz dist/migration.md dist/nginx-compatibility.md dist/SHA256SUMS --title "f-operator $GITHUB_REF_NAME" --notes-file docs/release-notes.md
-# Deliberately no cluster credentials, kubectl apply, deployment job or automatic rollout.
+  deploy:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-kube
+        with:
+          kube_pwd: ${{ secrets.KUBE_PWD }}
+      - name: Install tested API and exact released controller
+        env:
+          OPERATOR_IMAGE: ghcr.io/fabiokaelin/f-operator@${{ needs.release.outputs.image_digest }}
+        run: |
+          kubectl apply -f config/crd/bases
+          kubectl apply -f pressure/priorities.json
+          kubectl set image deployment/f-operator-controller-manager -n f-operator-system manager="$OPERATOR_IMAGE"
+          kubectl rollout status deployment/f-operator-controller-manager -n f-operator-system --timeout=300s
+          python3 pressure/apply-priorities.py
+      - name: Install pressure guard without replacing recovery state
+        run: |
+          state=$(kubectl get configmap pressure-state -n f-operator-system --ignore-not-found -o name)
+          if [ -z "$state" ]; then
+            kubectl create configmap pressure-state -n f-operator-system --from-literal='state.json={}'
+          fi
+          python3 pressure/render.py > /tmp/pressure.json
+          kubectl apply -f /tmp/pressure.json
+          kubectl rollout status deployment/pressure-guard -n f-operator-system --timeout=300s

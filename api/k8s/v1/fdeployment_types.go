@@ -46,6 +46,13 @@ type FdeploymentSpec struct {
 	Image string `json:"image,omitempty"`
 	Tag   string `json:"tag,omitempty"`
 
+	// PriorityClassName selects an infrastructure-managed scheduling/eviction priority.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
+	PriorityClassName string `json:"priorityClassName,omitempty"`
+	// Suspend gracefully scales application pods to zero while retaining all data and desired replicas.
+	Suspend bool `json:"suspend,omitempty"`
+
 	Security FdeploymentSecurity `json:"security,omitempty"`
 
 	Resources FdeploymentResources `json:"resources"`

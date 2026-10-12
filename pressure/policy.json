@@ -1,0 +1,237 @@
+{
+  "low_memory_mib": 750,
+  "low_cgroup_mib": 500,
+  "recover_memory_mib": 1500,
+  "recover_cgroup_mib": 1000,
+  "cooldown_seconds": 120,
+  "groups": [
+    {
+      "name": "shortcuts",
+      "apps": [
+        [
+          "fdeployments",
+          "keys",
+          "keys"
+        ]
+      ]
+    },
+    {
+      "name": "random-minecraft",
+      "apps": [
+        [
+          "fdeployments",
+          "minecraft",
+          "randomminecraft"
+        ]
+      ]
+    },
+    {
+      "name": "homarr",
+      "apps": [
+        [
+          "deployments",
+          "arr-stack",
+          "homarr"
+        ]
+      ]
+    },
+    {
+      "name": "bazarr",
+      "apps": [
+        [
+          "deployments",
+          "arr-stack",
+          "bazarr"
+        ]
+      ]
+    },
+    {
+      "name": "prowlarr",
+      "apps": [
+        [
+          "deployments",
+          "arr-stack",
+          "prowlarr"
+        ]
+      ]
+    },
+    {
+      "name": "sabnzbd",
+      "apps": [
+        [
+          "deployments",
+          "arr-stack",
+          "sabnzbd"
+        ]
+      ]
+    },
+    {
+      "name": "tipp-dev",
+      "apps": [
+        [
+          "fdeployments",
+          "tipp",
+          "dev-frontend"
+        ],
+        [
+          "fdeployments",
+          "tipp",
+          "dev-backend"
+        ]
+      ],
+      "databases": [
+        [
+          "statefulsets",
+          "tipp",
+          "dev-db"
+        ]
+      ]
+    },
+    {
+      "name": "fmedias",
+      "apps": [
+        [
+          "fdeployments",
+          "media",
+          "dev-frontend"
+        ],
+        [
+          "fdeployments",
+          "media",
+          "dev-backend"
+        ]
+      ],
+      "databases": [
+        [
+          "statefulsets",
+          "media",
+          "dev-db"
+        ]
+      ]
+    },
+    {
+      "name": "sonarr",
+      "apps": [
+        [
+          "deployments",
+          "arr-stack",
+          "sonarr"
+        ]
+      ]
+    },
+    {
+      "name": "radarr",
+      "apps": [
+        [
+          "deployments",
+          "arr-stack",
+          "radarr"
+        ]
+      ]
+    },
+    {
+      "name": "seerr",
+      "apps": [
+        [
+          "deployments",
+          "arr-stack",
+          "seerr"
+        ]
+      ]
+    },
+    {
+      "name": "f-home",
+      "apps": [
+        [
+          "deployments",
+          "arr-stack",
+          "fmain-frontend"
+        ],
+        [
+          "deployments",
+          "arr-stack",
+          "fhome-api"
+        ]
+      ]
+    },
+    {
+      "name": "grafana-ui",
+      "apps": [
+        [
+          "deployments",
+          "monitoring",
+          "grafana"
+        ]
+      ]
+    },
+    {
+      "name": "jellyfin",
+      "apps": [
+        [
+          "deployments",
+          "arr-stack",
+          "jellyfin"
+        ]
+      ]
+    },
+    {
+      "name": "f-image",
+      "apps": [
+        [
+          "deployments",
+          "f-image",
+          "f-image"
+        ]
+      ]
+    },
+    {
+      "name": "foauth",
+      "apps": [
+        [
+          "fdeployments",
+          "oauth",
+          "oauth-frontend"
+        ],
+        [
+          "fdeployments",
+          "oauth",
+          "oauth-backend"
+        ]
+      ],
+      "databases": [
+        [
+          "statefulsets",
+          "oauth",
+          "db"
+        ]
+      ]
+    },
+    {
+      "name": "tipp-prod",
+      "apps": [
+        [
+          "fdeployments",
+          "tipp",
+          "prod-consumer"
+        ],
+        [
+          "fdeployments",
+          "tipp",
+          "prod-frontend"
+        ],
+        [
+          "fdeployments",
+          "tipp",
+          "prod-backend"
+        ]
+      ],
+      "databases": [
+        [
+          "statefulsets",
+          "tipp",
+          "prod-db"
+        ]
+      ]
+    }
+  ]
+}

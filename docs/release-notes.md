@@ -1,3 +1,13 @@
+# f-operator v0.3.0
+
+Add infrastructure-managed `priorityClassName` and reversible `suspend` to Fdeployment. Suspension preserves desired replicas, Services/routes and all persistence; status explicitly reports Suspended. Graceful termination gets 120 seconds. Tested stop/resume reconciliation retains immutable selectors and unrelated sidecars.
+
+GitHub release now publishes multi-architecture images, immutable install artifacts and deploys the exact released digest. Owner-specific pressure policy and guard are versioned in `pressure/`: ordered application/database groups, durable pre-mutation journal, application-first stop/database-first readiness recovery, non-preempting priorities and hysteresis. Control-plane, routing and Prometheus are outside shedding. This mitigates pressure; it does not establish a permanent cause/fix for all API/etcd stalls.
+
+Validation: full make test including isolated envtest; Python pressure ordering/recovery tests. Rollback: disable pressure guard, recover any recorded stopped groups first, revert controller to prior release; do not delete PVCs or pressure-state.
+
+---
+
 Envoy Gateway routing and operator safety improvements, prepared for a later migration.
 
 - Replace operator-created Ingresses with Gateway API HTTPRoutes, preserving hostnames, prefix paths and Service port 80.
