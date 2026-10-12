@@ -22,9 +22,13 @@ for group in policy['groups']:
                 time.sleep(2)
             else:raise RuntimeError('Operator priority was not reconciled')
             subprocess.run([sys.executable,str(Path(__file__).with_name('wait-ready.py')),workload+'/'+name,ns],check=True)
+# Monitoring operator regenerates StatefulSets; persist priority in its owning CRs.
+for kind in ['prometheus','alertmanager']:
+    for resource in json.loads(call('get',kind,'-n','monitoring','-o','json'))['items']:
+        call('patch',kind,resource['metadata']['name'],'-n','monitoring','--type=merge','-p',json.dumps({'spec':{'priorityClassName':'fabkli-infrastructure'}}))
 # Leave Kubernetes system-critical priority classes intact. Protect supporting deployments.
-for ns in ['envoy-gateway-system','f-operator-system','monitoring']:
-    for obj in json.loads(call('get','deployments,statefulsets','-n',ns,'-o','json'))['items']:
+for ns in ['envoy-gateway-system','f-operator-system','monitoring','kube-system']:
+    for obj in json.loads(call('get','deployments,statefulsets,daemonsets','-n',ns,'-o','json'))['items']:
         name=obj['metadata']['name']
         if name=='grafana':continue
         kind=obj['kind'].lower();current=obj['spec']['template']['spec'].get('priorityClassName','')

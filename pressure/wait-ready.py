@@ -10,8 +10,13 @@ while time.monotonic()<deadline:
         raw=subprocess.check_output(['kubectl','--request-timeout=15s','get',kind,name,'-n',namespace,'-o','json'],text=True,timeout=25)
         obj=json.loads(raw);spec=obj['spec'];status=obj.get('status',{});wanted=spec.get('replicas',1)
         fresh=status.get('observedGeneration',0)>=obj['metadata']['generation']
-        ready=status.get('readyReplicas',0)>=wanted and status.get('updatedReplicas',0)>=wanted
-        complete=status.get('replicas',0)==wanted and status.get('terminatingReplicas',0)==0
+        if kind in ('daemonset','daemonsets'):
+            wanted=status.get('desiredNumberScheduled',1)
+            ready=status.get('numberReady',0)>=wanted and status.get('updatedNumberScheduled',0)>=wanted
+            complete=status.get('numberAvailable',0)>=wanted
+        else:
+            ready=status.get('readyReplicas',0)>=wanted and status.get('updatedReplicas',0)>=wanted
+            complete=status.get('replicas',0)==wanted and status.get('terminatingReplicas',0)==0
         if fresh and ready and complete:
             print('Ready:',namespace,kind,name);break
     except (subprocess.SubprocessError,ValueError):pass

@@ -1,5 +1,8 @@
 name: Deploy workload pressure policy
 on:
+  push:
+    branches: [main]
+    paths: ['pressure/**', '.github/workflows/workload-policy.yaml']
   workflow_dispatch:
 permissions:
   contents: read
