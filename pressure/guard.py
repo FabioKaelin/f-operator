@@ -47,7 +47,7 @@ class Guard:
         obj.update(result)
     def mutate(self,target,entry,stop):
         obj=self.api.call(path(target))
-        if obj['metadata'].get('uid') != entry.get('uid'):raise ValueError('Workload was recreated; manual review required')
+        if 'uid' in entry and obj['metadata'].get('uid') != entry['uid']:raise ValueError('Workload was recreated; manual review required')
         spec=obj['spec'];field='suspend' if target[0]=='fdeployments' else 'replicas'
         value=True if field=='suspend' else 0
         original=entry['original']
