@@ -14,11 +14,11 @@ STATE_NAME='pressure-state'
 class API:
     def __init__(self):
         directory=Path('/var/run/secrets/kubernetes.io/serviceaccount')
-        self.token=(directory/'token').read_text().strip()
+        self.token_path=directory/'token'
         self.base='https://'+os.environ['KUBERNETES_SERVICE_HOST']+':'+os.environ.get('KUBERNETES_SERVICE_PORT_HTTPS','443')
         self.opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=str(directory/'ca.crt'))))
     def call(self,path,method='GET',body=None):
-        headers={'Authorization':'Bearer '+self.token,'Content-Type':'application/merge-patch+json' if method=='PATCH' else 'application/json'}
+        headers={'Authorization':'Bearer '+self.token_path.read_text().strip(),'Content-Type':'application/merge-patch+json' if method=='PATCH' else 'application/json'}
         request=urllib.request.Request(self.base+path,headers=headers,method=method,data=json.dumps(body).encode() if body is not None else None)
         with self.opener.open(request,timeout=8) as response:
             data=response.read(4*1024*1024+1)
@@ -126,13 +126,22 @@ class Guard:
 
 def sample_cpu():
     return [int(x) for x in Path('/host-proc/stat').read_text().splitlines()[0].split()[1:9]]
+def cgroup_headroom(maximum,current,stats):
+    if maximum == 'max':return 1000000000
+    # Inactive clean file cache is reclaimable; anonymous memory, shmem and
+    # dirty/writeback pages remain charged. Clamp against inconsistent samples.
+    reclaimable=max(0,stats.get('inactive_file',0)-stats.get('file_dirty',0)-stats.get('file_writeback',0))
+    reclaimable=min(current,reclaimable)
+    return (int(maximum)-current+reclaimable)/1024**2
+
 def memory():
     values={line.split(':')[0]:int(line.split()[1]) for line in Path('/host-proc/meminfo').read_text().splitlines()}
     available=values['MemAvailable']/1024
     # Host and Minikube container headroom are distinct: whichever reaches pressure first matters.
     folder=Path('/host-cgroup')/MINIKUBE_CGROUP.lstrip('/')
     maximum=(folder/'memory.max').read_text().strip();current=int((folder/'memory.current').read_text())
-    headroom=1000000000 if maximum=='max' else (int(maximum)-current)/1024**2
+    stats={line.split()[0]:int(line.split()[1]) for line in (folder/'memory.stat').read_text().splitlines()}
+    headroom=cgroup_headroom(maximum,current,stats)
     return available,headroom
 
 def discover_cgroup():

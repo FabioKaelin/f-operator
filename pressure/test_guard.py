@@ -55,3 +55,26 @@ class GuardTests(unittest.TestCase):
         guard=Guard(api,{})
         self.assertFalse(guard.suspend({'metadata':{'resourceVersion':'1'}},{},{'name':'app','apps':[['fdeployments','app','web']],'databases':[['statefulsets','app','db']]}))
         self.assertEqual(api.actions,[])
+
+    def test_api_reloads_rotated_projected_token(self):
+        import tempfile,io
+        from pathlib import Path
+        from guard import API as RealAPI
+        class Opener:
+            def __init__(self):self.tokens=[]
+            def open(self,request,timeout):
+                self.tokens.append(request.get_header('Authorization'))
+                return io.BytesIO(b'{}')
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'token';path.write_text('first-fixture')
+            api=object.__new__(RealAPI);api.base='https://k8s.invalid';api.token_path=path;api.opener=Opener()
+            api.call('/test');path.write_text('rotated-fixture');api.call('/test')
+            self.assertEqual(api.opener.tokens,['Bearer first-fixture','Bearer rotated-fixture'])
+
+    def test_clean_cache_does_not_trigger_false_pressure(self):
+        from guard import cgroup_headroom
+        mib=1024**2
+        self.assertEqual(cgroup_headroom(str(6656*mib),6400*mib,{'inactive_file':1200*mib,'file_dirty':50*mib,'file_writeback':10*mib}),1396)
+        self.assertEqual(cgroup_headroom(str(6656*mib),6400*mib,{'inactive_file':0}),256)
+        self.assertEqual(cgroup_headroom(str(6656*mib),6400*mib,{'inactive_file':100*mib,'file_dirty':200*mib}),256)
+        self.assertGreater(cgroup_headroom('max',6400*mib,{}),1000000)
