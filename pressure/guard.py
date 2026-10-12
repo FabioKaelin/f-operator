@@ -46,7 +46,9 @@ class Guard:
         result=self.api.call('/api/v1/namespaces/'+NS+'/configmaps/'+STATE_NAME,'PATCH',{'metadata':{'resourceVersion':obj['metadata']['resourceVersion']},'data':{'state.json':json.dumps(state)}})
         obj.update(result)
     def mutate(self,target,entry,stop):
-        obj=self.api.call(path(target));spec=obj['spec'];field='suspend' if target[0]=='fdeployments' else 'replicas'
+        obj=self.api.call(path(target))
+        if 'uid' in entry and obj['metadata'].get('uid') != entry['uid']:raise ValueError('Workload was recreated; manual review required')
+        spec=obj['spec'];field='suspend' if target[0]=='fdeployments' else 'replicas'
         value=True if field=='suspend' else 0
         original=entry['original']
         annotation='fabkli.ch/pressure-owner'
@@ -61,7 +63,7 @@ class Guard:
         self.api.call(path(target),'PATCH',{'metadata':{'resourceVersion':obj['metadata']['resourceVersion'],'annotations':{annotation:entry['owner'] if stop else None}},'spec':{field:value if stop else original}})
     def capture(self,target,owner):
         obj=self.api.call(path(target));field='suspend' if target[0]=='fdeployments' else 'replicas';value=obj['spec'].get(field,False if field=='suspend' else 1)
-        return {'target':target,'original':value,'owner':owner,'done':False}
+        return {'target':target,'original':value,'uid':obj['metadata'].get('uid'),'owner':owner,'done':False}
     def suspend(self,obj,state,group):
         active=state.get('active')
         if not active:
@@ -75,7 +77,7 @@ class Guard:
         for index,entry in enumerate(active['entries']):
             if not entry['done']:
                 if index>=active['app_count']:
-                    if any(pods(self.api,e['target']) for e in active['entries'][:active['app_count']]):return False
+                    if any(pods(self.api,target) for target in group['apps']):return False
                 self.mutate(entry['target'],entry,True);entry['done']=True;self.save(obj,state)
             # Never start the next group while application/database pods are still terminating.
             if pods(self.api,entry['target']):return False

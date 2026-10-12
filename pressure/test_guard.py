@@ -44,3 +44,14 @@ class GuardTests(unittest.TestCase):
         policy=json.loads(Path(__file__).with_name('policy.json').read_text())
         self.assertEqual(policy['groups'][0]['name'],'shortcuts');self.assertEqual(policy['groups'][-1]['name'],'tipp-prod')
         self.assertFalse(any('prometheus' in t[2] or 'etcd' in t[2] for g in policy['groups'] for t in g['apps']+g.get('databases',[])))
+
+    def test_recreated_database_is_not_adopted(self):
+        api=API();guard=Guard(api,{});target=['statefulsets','app','db'];entry=guard.capture(target,'test')
+        api.objects['/apis/apps/v1/namespaces/app/statefulsets/db']['metadata']['uid']='new-database'
+        with self.assertRaises(ValueError):guard.mutate(target,entry,True)
+        self.assertEqual(api.actions,[])
+    def test_manually_suspending_app_must_terminate_before_database(self):
+        api=API();api.objects['/apis/k8s.fabkli.ch/v1/namespaces/app/fdeployments/web']['spec']['suspend']=True
+        guard=Guard(api,{})
+        self.assertFalse(guard.suspend({'metadata':{'resourceVersion':'1'}},{},{'name':'app','apps':[['fdeployments','app','web']],'databases':[['statefulsets','app','db']]}))
+        self.assertEqual(api.actions,[])
