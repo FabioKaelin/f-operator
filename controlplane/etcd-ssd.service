@@ -1,0 +1,14 @@
+[Unit]
+Description=Verified encrypted SSD filesystem for etcd
+Requires=arr-mount-ready.service
+After=arr-mount-ready.service
+Before=kubelet.service
+
+[Service]
+Type=oneshot
+ExecStart=/var/lib/minikube/controlplane/mount-etcd-ssd.sh
+RemainAfterExit=yes
+TimeoutStartSec=90
+
+[Install]
+WantedBy=multi-user.target
