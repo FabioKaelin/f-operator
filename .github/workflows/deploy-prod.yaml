@@ -98,7 +98,7 @@ jobs:
           kubectl apply -f config/crd/bases
           kubectl apply -f pressure/priorities.json
           kubectl set image deployment/f-operator-controller-manager -n f-operator-system manager="$OPERATOR_IMAGE"
-          kubectl rollout status deployment/f-operator-controller-manager -n f-operator-system --timeout=300s
+          python3 pressure/wait-ready.py deployment/f-operator-controller-manager f-operator-system
           python3 pressure/apply-priorities.py
       - name: Install pressure guard without replacing recovery state
         run: |
@@ -108,4 +108,4 @@ jobs:
           fi
           python3 pressure/render.py > /tmp/pressure.json
           kubectl apply -f /tmp/pressure.json
-          kubectl rollout status deployment/pressure-guard -n f-operator-system --timeout=300s
+          python3 pressure/wait-ready.py deployment/pressure-guard f-operator-system
