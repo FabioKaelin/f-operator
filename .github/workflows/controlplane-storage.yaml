@@ -1,0 +1,31 @@
+name: Move etcd storage to existing SSD
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: controlplane-storage-production
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: bash -n controlplane/*.sh && python3 -m unittest discover -s controlplane -p 'test_*.py'
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-kube
+        with:
+          kube_pwd: ${{ secrets.KUBE_PWD }}
+      - name: Deploy versioned host maintenance
+        run: |
+          set -euo pipefail
+          kubectl create configmap etcd-ssd-source -n f-operator-system --from-file=controlplane --dry-run=client -o json | kubectl apply -f -
+          python3 controlplane/render-job.py "$GITHUB_RUN_ID" > /tmp/etcd-ssd-job.json
+          kubectl apply -f /tmp/etcd-ssd-job.json
+          python3 controlplane/wait-maintenance.py "etcd-ssd-$GITHUB_RUN_ID"

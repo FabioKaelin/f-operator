@@ -1,0 +1,13 @@
+# etcd SSD storage maintenance
+
+The existing Samsung T5 EVO (UUID F0F7-DB96) provides an encrypted4GiB LUKS2 file containing ext4. Existing SSD partitions/media are never formatted. The random512-bit key is root-only on the persistent node volume; include it in encrypted managed backups. Public source contains only its location. Kernel file/disk synchronization remains enabled.
+
+Before first migration save and validate an etcdctl snapshot at `/var/lib/minikube/etcd/pre-ssd-snapshot.db`; retain a private off-node copy. Run the `Move etcd storage to existing SSD` GitHub workflow from main after CI. Its versioned privileged job installs prerequisites, verifies SSD UUID and p99 fdatasync under10ms, then stops kubelet and etcd, copies the same member offline with checksums and changes only the static Pod hostPath. All application/database containers continue running during the short control-plane maintenance. Job and API readiness use bounded GET polling; no watch dependency. Repeating a completed migration mounts/verifies storage without restarting etcd.
+
+The original SD member directory and `/var/lib/minikube/controlplane/etcd.original.yaml` remain intact. `migration.json` records phases. After etcd accepts writes on SSD, the old SD copy is stale: never blindly restore it. For rollback stop kubelet/etcd, copy the current SSD member offline back to a new SD directory with checksum comparison, retain both prior copies, restore the original hostPath manifest, remove the kubelet SSD dependency, reload systemd and restart kubelet. If current data is unavailable/corrupted, restore the validated snapshot using official etcdutl recovery and document revision rollback; do not pretend stale data is current.
+
+The boot service checks SSD UUID, encryption key permissions, LUKS mapping backing file and ext4 label/device. A missing/wrong SSD refuses kubelet startup instead of starting an empty cluster. Host ARR mounting must complete before this service. Test service remount/idempotence while live; do not reboot the entire server solely for verification.
+
+Verification: etcd endpoint health/status (same cluster/member, increasing revision), no alarms, API read/write/readiness, all app/database/collector Ready, representative HTTP routes, and new fdatasync histogram/logs. A short clean observation window is evidence of the correction, not proof that an intermittent problem can never recur.
+
+Primary references: https://etcd.io/docs/v3.6/op-guide/hardware/ ; https://etcd.io/docs/v3.6/tuning/ ; https://etcd.io/docs/v3.6/op-guide/recovery/ . This isolates etcd I/O from microSD and other SD writers; it does not repair defective hardware or protect against loss of the single server/SSD.

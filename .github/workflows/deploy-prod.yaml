@@ -21,6 +21,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: python3 -m unittest discover -s pressure -p 'test_*.py'
+      - run: bash -n controlplane/*.sh && python3 -m unittest discover -s controlplane -p 'test_*.py'
       - run: make test
       - run: make build
       - run: make test-envoy
