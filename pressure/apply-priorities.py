@@ -2,6 +2,7 @@
 import json
 import subprocess
 import time
+import sys
 from pathlib import Path
 policy=json.loads(Path(__file__).with_name('policy.json').read_text())
 def call(*args):return subprocess.check_output(['kubectl','--request-timeout=20s',*args],text=True)
@@ -20,7 +21,7 @@ for group in policy['groups']:
                 if observed['spec']['template']['spec'].get('priorityClassName')==priority:break
                 time.sleep(2)
             else:raise RuntimeError('Operator priority was not reconciled')
-            call('rollout','status',workload+'/'+name,'-n',ns,'--timeout=300s')
+            subprocess.run([sys.executable,str(Path(__file__).with_name('wait-ready.py')),workload+'/'+name,ns],check=True)
 # Leave Kubernetes system-critical priority classes intact. Protect supporting deployments.
 for ns in ['envoy-gateway-system','f-operator-system','monitoring']:
     for obj in json.loads(call('get','deployments,statefulsets','-n',ns,'-o','json'))['items']:
@@ -29,6 +30,6 @@ for ns in ['envoy-gateway-system','f-operator-system','monitoring']:
         kind=obj['kind'].lower();current=obj['spec']['template']['spec'].get('priorityClassName','')
         if current.startswith('system-'):continue
         call('patch',kind,name,'-n',ns,'--type=merge','-p',json.dumps({'spec':{'template':{'spec':{'priorityClassName':'fabkli-infrastructure'}}}}))
-        call('rollout','status',kind+'/'+name,'-n',ns,'--timeout=300s')
+        subprocess.run([sys.executable,str(Path(__file__).with_name('wait-ready.py')),kind+'/'+name,ns],check=True)
 call('patch','deployment','f-gateway','-n','arr-stack','--type=merge','-p',json.dumps({'spec':{'template':{'spec':{'priorityClassName':'fabkli-infrastructure'}}}}))
 print('Owner workload priorities applied; system-critical priorities preserved.')
