@@ -213,7 +213,7 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 					AutomountServiceAccountToken: &[]bool{false}[0],
 					Containers: []corev1.Container{{
 						Name:            name,
-						Image:           "mariadb:11",
+						Image:           "mariadb@sha256:c4124d1afa875e47f2892edf26b482fa54f796e2f342d3717a04ca091a22a9bd",
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 3306,
