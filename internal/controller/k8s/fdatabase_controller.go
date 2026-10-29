@@ -211,9 +211,10 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 				},
 				Spec: corev1.PodSpec{
 					AutomountServiceAccountToken: &[]bool{false}[0],
+					ImagePullSecrets:             []corev1.LocalObjectReference{{Name: "regcred"}},
 					Containers: []corev1.Container{{
 						Name:            name,
-						Image:           "mariadb@sha256:c4124d1afa875e47f2892edf26b482fa54f796e2f342d3717a04ca091a22a9bd",
+						Image:           "ghcr.io/fabiokaelin/patched-mariadb@sha256:9464a9ed3a2e4f23a40e49d2ddda1abdf8dd21f59dcd5bdc79b45148e886872a",
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 3306,
