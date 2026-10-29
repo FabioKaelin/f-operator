@@ -21,7 +21,6 @@ jobs:
       - name: Update and check Go dependencies
         working-directory: .
         run: |
-          go get -u=patch ./...
           go get google.golang.org/grpc@v1.79.3
           go mod tidy
           go test ./...
