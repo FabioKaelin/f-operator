@@ -1,46 +1,62 @@
-name: Security image publication
+name: Pi4 compatible Envoy build
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
   packages: write
 concurrency:
-  group: security-publication
+  group: envoy-pi4-compatible-build
   cancel-in-progress: false
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+    env:
+      ENVOY_COMMIT: aacd0340210b536e99ec44ebe59ab9d16b259552
+      ENVOY_DOCKER_CI: '1'
+      ENVOY_DOCKER_BUILD_DIR: /tmp/envoy-pi4-build
+      BAZEL_BUILD_EXTRA_OPTIONS: --define=tcmalloc=gperftools --jobs=2 --local_ram_resources=6144 --discard_analysis_cache
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.27.3'
-          cache-dependency-path: ./go.sum
-      - name: Update and check Go dependencies
-        working-directory: .
+      - name: Prepare isolated hosted runner
         run: |
-          go get google.golang.org/grpc@v1.83.2
-          go mod tidy
-          make test
+          # Only unused SDKs on the disposable GitHub runner, never production storage.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+          test "$(uname -m)" = aarch64
+          git clone --filter=blob:none --no-checkout https://github.com/envoyproxy/envoy.git envoy-source
+          git -C envoy-source checkout "$ENVOY_COMMIT"
+          test "$(git -C envoy-source rev-parse HEAD)" = "$ENVOY_COMMIT"
+      - name: Build exact release with compatible allocator
+        working-directory: envoy-source
+        run: ./ci/run_envoy_docker.sh './ci/do_ci.sh release.server_only'
+      - name: Collect and verify binary
+        run: |
+          binary=/tmp/envoy-pi4-build/envoy/arm64/source/exe/envoy/envoy
+          test -s "$binary"
+          mkdir -p compatibility/envoy-pi4/image
+          cp "$binary" compatibility/envoy-pi4/image/envoy
+          strip compatibility/envoy-pi4/image/envoy
+          compatibility/envoy-pi4/image/envoy --version | tee compatibility/envoy-pi4/image/version.txt
+          grep -q '1.39.6' compatibility/envoy-pi4/image/version.txt
+          sha256sum compatibility/envoy-pi4/image/envoy > compatibility/envoy-pi4/image/SHA256SUMS
+          printf '%s\n' "$ENVOY_COMMIT" > compatibility/envoy-pi4/image/SOURCE_COMMIT
       - uses: actions/upload-artifact@v4
         with:
-          name: operator-dependency-locks
-          path: |
-            go.mod
-            go.sum
+          name: envoy-v1.39.6-arm64-gperftools
+          path: compatibility/envoy-pi4/image/
+          retention-days: 14
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.CR_PAT }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: compatibility/envoy-pi4
           platforms: linux/arm64
-          pull: true
           push: true
-          tags: ghcr.io/fabiokaelin/f-operator:security-20261029
+          provenance: mode=max
+          sbom: true
+          tags: ghcr.io/fabiokaelin/envoy-pi4:v1.39.6-gperftools-20261030
