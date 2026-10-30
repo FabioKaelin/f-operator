@@ -25,6 +25,7 @@ jobs:
         with:
           kube_pwd: ${{ secrets.KUBE_PWD }}
       - run: |
+          if [ -n "$(kubectl get configmap k3s-workload-placement -n f-operator-system --ignore-not-found -o name)" ]; then echo 'Native placement/pressure policy is owned by the k3s target configuration'; exit 0; fi
           kubectl apply -f pressure/priorities.json
           python3 pressure/apply-priorities.py
           state=$(kubectl get configmap pressure-state -n f-operator-system --ignore-not-found -o name)

@@ -97,12 +97,13 @@ jobs:
           OPERATOR_IMAGE: ghcr.io/fabiokaelin/f-operator@${{ needs.release.outputs.image_digest }}
         run: |
           kubectl apply -f config/crd/bases
-          kubectl apply -f pressure/priorities.json
+          if [ -z "$(kubectl get configmap k3s-workload-placement -n f-operator-system --ignore-not-found -o name)" ]; then kubectl apply -f pressure/priorities.json; fi
           kubectl set image deployment/f-operator-controller-manager -n f-operator-system manager="$OPERATOR_IMAGE"
           python3 pressure/wait-ready.py deployment/f-operator-controller-manager f-operator-system
-          python3 pressure/apply-priorities.py
+          if [ -z "$(kubectl get configmap k3s-workload-placement -n f-operator-system --ignore-not-found -o name)" ]; then python3 pressure/apply-priorities.py; fi
       - name: Install pressure guard without replacing recovery state
         run: |
+          if [ -n "$(kubectl get configmap k3s-workload-placement -n f-operator-system --ignore-not-found -o name)" ]; then echo 'Native placement/pressure policy is owned by the k3s target configuration'; exit 0; fi
           state=$(kubectl get configmap pressure-state -n f-operator-system --ignore-not-found -o name)
           if [ -z "$state" ]; then
             kubectl create configmap pressure-state -n f-operator-system --from-literal='state.json={}'

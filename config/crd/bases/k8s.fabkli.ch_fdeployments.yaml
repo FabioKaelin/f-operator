@@ -122,6 +122,44 @@ spec:
               path:
                 pattern: ^/
                 type: string
+              placement:
+                description: Placement optionally pins replicas to one node or spreads
+                  them across nodes.
+                properties:
+                  mode:
+                    enum:
+                    - SingleNode
+                    - Distributed
+                    type: string
+                  node:
+                    description: Node is the kubernetes.io/hostname label value, not
+                      spec.nodeName.
+                    maxLength: 63
+                    minLength: 1
+                    type: string
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: NodeSelector restricts eligible nodes in either mode.
+                    type: object
+                  spread:
+                    description: Preferred allows replicas to share surviving nodes;
+                      Required allows at most one per node.
+                    enum:
+                    - Preferred
+                    - Required
+                    type: string
+                required:
+                - mode
+                type: object
+                x-kubernetes-validations:
+                - message: SingleNode requires a hostname label value in node
+                  rule: self.mode != 'SingleNode' || (has(self.node) && size(self.node)
+                    > 0)
+                - message: Distributed must not specify node
+                  rule: self.mode != 'Distributed' || !has(self.node)
+                - message: spread applies only to Distributed
+                  rule: self.mode != 'SingleNode' || !has(self.spread)
               port:
                 format: int32
                 maximum: 65535

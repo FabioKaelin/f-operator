@@ -32,15 +32,18 @@ func TestIsolatedManager(t *testing.T) {
 		gatewayCRDs = filepath.Join(os.Getenv("HOME"), "go", "pkg", "mod", "sigs.k8s.io", "gateway-api@v1.6.1", "config", "crd", "standard")
 	}
 	env := &envtest.Environment{BinaryAssetsDirectory: assets, CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "config", "crd", "bases"), gatewayCRDs}, ErrorIfCRDPathMissing: true}
-	cfg, err := env.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Offline containers have no default route; this test API is loopback-only.
+	env.ControlPlane.GetAPIServer().Configure().Set("advertise-address", "127.0.0.1")
+	// Register before Start: CRD admission failures can leave a partial control plane running.
 	t.Cleanup(func() {
 		if err := env.Stop(); err != nil {
 			t.Error(err)
 		}
 	})
+	cfg, err := env.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{Scheme: s, Metrics: server.Options{BindAddress: "0"}, HealthProbeBindAddress: "0"})
 	if err != nil {
 		t.Fatal(err)
@@ -136,6 +139,79 @@ func TestIsolatedManager(t *testing.T) {
 	if !securityBad.Spec.Security.NginxCompatibility {
 		t.Fatal("CRD pruned NGINX compatibility option")
 	}
+	// Real admission checks the placement schema, then the manager applies transitions.
+	placementBad := dummyDeployment()
+	placementBad.Name = "invalid-placement"
+	placementBad.UID = ""
+	placementBad.Spec.Placement = &k8sv1.FdeploymentPlacement{Mode: "SingleNode"}
+	if err := c.Create(ctx, placementBad); err == nil {
+		t.Fatal("CRD admitted SingleNode without node")
+	}
+	placementBad.Spec.Placement = &k8sv1.FdeploymentPlacement{Mode: "Distributed", Node: "raspy"}
+	if err := c.Create(ctx, placementBad); err == nil {
+		t.Fatal("CRD admitted Distributed with node")
+	}
+	placementBad.Spec.Placement = &k8sv1.FdeploymentPlacement{Mode: "Distributed", Spread: "Required"}
+	if err := c.Create(ctx, placementBad); err != nil {
+		t.Fatal(err)
+	}
+	placementKey := client.ObjectKeyFromObject(placementBad)
+	placementDep := &appsv1.Deployment{}
+	eventually(t, func() bool {
+		if c.Get(ctx, placementKey, placementDep) != nil {
+			return false
+		}
+		a := placementDep.Spec.Template.Spec.Affinity
+		return a != nil && a.PodAntiAffinity != nil && len(a.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution) == 1
+	})
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := c.Get(ctx, placementKey, placementBad); err != nil {
+			return err
+		}
+		placementBad.Spec.Placement = &k8sv1.FdeploymentPlacement{Mode: "Distributed", Spread: "Preferred"}
+		return c.Update(ctx, placementBad)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool {
+		if c.Get(ctx, placementKey, placementDep) != nil {
+			return false
+		}
+		a := placementDep.Spec.Template.Spec.Affinity
+		return a != nil && a.PodAntiAffinity != nil && len(a.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution) == 1
+	})
+	placementVersion := placementDep.ResourceVersion
+	time.Sleep(time.Second)
+	if err := c.Get(ctx, placementKey, placementDep); err != nil {
+		t.Fatal(err)
+	}
+	if placementDep.ResourceVersion != placementVersion {
+		t.Fatal("API defaults caused a placement reconciliation loop")
+	}
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := c.Get(ctx, placementKey, placementBad); err != nil {
+			return err
+		}
+		placementBad.Spec.Placement = &k8sv1.FdeploymentPlacement{Mode: "SingleNode", Node: "raspy"}
+		return c.Update(ctx, placementBad)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool {
+		return c.Get(ctx, placementKey, placementDep) == nil && placementDep.Spec.Template.Spec.NodeSelector[corev1.LabelHostname] == "raspy" && placementDep.Spec.Template.Spec.Affinity == nil
+	})
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := c.Get(ctx, placementKey, placementBad); err != nil {
+			return err
+		}
+		placementBad.Spec.Placement = nil
+		return c.Update(ctx, placementBad)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool {
+		return c.Get(ctx, placementKey, placementDep) == nil && len(placementDep.Spec.Template.Spec.NodeSelector) == 0 && placementDep.Spec.Template.Spec.Affinity == nil
+	})
 	// A missing Gateway becomes Ready after current gateway/route/workload status.
 	g := &gatewayv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "gateway"}, Spec: gatewayv1.GatewaySpec{GatewayClassName: "envoy", Listeners: []gatewayv1.Listener{{Name: "http", Port: 80, Protocol: gatewayv1.HTTPProtocolType}}}}
 	if err := c.Create(ctx, g); err != nil {

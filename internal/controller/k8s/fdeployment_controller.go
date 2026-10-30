@@ -165,6 +165,19 @@ func (r *FdeploymentReconciler) reconcileOwned(ctx context.Context, f *k8sv1.Fde
 	case *appsv1.Deployment:
 		d := desired.(*appsv1.Deployment)
 		c.Spec.Replicas = d.Spec.Replicas
+		if f.Spec.Placement != nil || c.Annotations[placementManagedAnnotation] == "true" {
+			c.Spec.Strategy = d.Spec.Strategy
+			c.Spec.Template.Spec.NodeSelector = d.Spec.Template.Spec.NodeSelector
+			c.Spec.Template.Spec.Affinity = d.Spec.Template.Spec.Affinity
+			if c.Annotations == nil {
+				c.Annotations = map[string]string{}
+			}
+			if f.Spec.Placement != nil {
+				c.Annotations[placementManagedAnnotation] = "true"
+			} else {
+				delete(c.Annotations, placementManagedAnnotation)
+			}
+		}
 		// Existing releases included the version in their immutable selector.
 		// Keep its labels while updating the rest of the pod template.
 		labels := c.Spec.Selector.MatchLabels
@@ -237,6 +250,9 @@ func validatedResources(v k8sv1.FdeploymentResources) (corev1.ResourceRequiremen
 	return result, nil
 }
 func validateFdeployment(f *k8sv1.Fdeployment) error {
+	if err := validatePlacement(f.Spec.Placement); err != nil {
+		return err
+	}
 	if f.Spec.PriorityClassName != "" && len(validation.IsDNS1123Subdomain(f.Spec.PriorityClassName)) != 0 {
 		return fmt.Errorf("invalid priorityClassName")
 	}
@@ -561,6 +577,8 @@ func (r *FdeploymentReconciler) deploymentForFDeployment(
 
 	// Set the ownerRef for the Deployment
 	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+	applyPlacement(dep, fdeployment.Spec.Placement)
+
 	if err := ctrl.SetControllerReference(fdeployment, dep, r.Scheme); err != nil {
 		return nil, err
 	}
