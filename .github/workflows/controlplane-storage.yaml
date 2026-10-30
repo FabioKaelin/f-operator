@@ -25,6 +25,7 @@ jobs:
       - name: Deploy versioned host maintenance
         run: |
           set -euo pipefail
+          if [ -n "$(kubectl get configmap k3s-workload-placement -n f-operator-system --ignore-not-found -o name)" ]; then echo 'Legacy Minikube etcd migration is retired on native k3s'; exit 0; fi
           kubectl create configmap etcd-ssd-source -n f-operator-system --from-file=controlplane --dry-run=client -o json | kubectl apply -f -
           python3 controlplane/render-job.py "$GITHUB_RUN_ID" > /tmp/etcd-ssd-job.json
           kubectl apply -f /tmp/etcd-ssd-job.json

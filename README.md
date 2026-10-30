@@ -35,3 +35,13 @@ Fdatabase-created PVCs survive CR deletion. Existing independent StatefulSets ar
 Pushes and pull requests run validation. Semver tags `vX.Y.Z` additionally build ARM64/AMD64 images, publish to GHCR, and create a GitHub release with a digest-pinned install.yaml, image.txt, gateway configuration archive, migration runbook and SHA256SUMS. There is no deployment job and no cluster credentials in this workflow. The default version is 0.2.2. Never reuse published tags.
 
 Pinned infrastructure manifests live in `config/gateway`. The public TLS proxy and certificate renewal remain host-managed. Internal Tipp traffic stays internal. Popeye is optional read-only audit tooling; it is not installed by the operator.
+
+## Two-node preparation and application placement
+
+Optional `spec.placement` supports `SingleNode` (explicit hostname) and
+`Distributed` with `Preferred` or `Required` hostname anti-affinity. Replicas
+remain independently configurable; omitting placement preserves legacy scheduling.
+See [k3s preparation and examples](docs/k3s/README.md), the
+[database proposal](docs/k3s/database-plan.md), and the optional two-manager
+[Kustomize overlay](config/overlays/ha/kustomization.yaml). These features configure
+scheduling and controller redundancy; they do not create database/control-plane HA.

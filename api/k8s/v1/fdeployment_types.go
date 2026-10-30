@@ -53,6 +53,9 @@ type FdeploymentSpec struct {
 	// Suspend gracefully scales application pods to zero while retaining all data and desired replicas.
 	Suspend bool `json:"suspend,omitempty"`
 
+	// Placement optionally pins replicas to one node or spreads them across nodes.
+	Placement *FdeploymentPlacement `json:"placement,omitempty"`
+
 	Security FdeploymentSecurity `json:"security,omitempty"`
 
 	Resources FdeploymentResources `json:"resources"`
@@ -60,6 +63,24 @@ type FdeploymentSpec struct {
 	HealthCheck FdeploymentHealthCheck `json:"healthCheck"`
 
 	Environments []Environment `json:"env,omitempty"`
+}
+
+// FdeploymentPlacement controls application scheduling, not database or control-plane HA.
+// +kubebuilder:validation:XValidation:rule="self.mode != 'SingleNode' || (has(self.node) && size(self.node) > 0)",message="SingleNode requires a hostname label value in node"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'Distributed' || !has(self.node)",message="Distributed must not specify node"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'SingleNode' || !has(self.spread)",message="spread applies only to Distributed"
+type FdeploymentPlacement struct {
+	// +kubebuilder:validation:Enum=SingleNode;Distributed
+	Mode string `json:"mode"`
+	// Node is the kubernetes.io/hostname label value, not spec.nodeName.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	Node string `json:"node,omitempty"`
+	// NodeSelector restricts eligible nodes in either mode.
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// Preferred allows replicas to share surviving nodes; Required allows at most one per node.
+	// +kubebuilder:validation:Enum=Preferred;Required
+	Spread string `json:"spread,omitempty"`
 }
 
 // FdeploymentSecurity allows explicit compatibility exceptions for application images.
