@@ -47,10 +47,13 @@ jobs:
           exit "$status"
       - name: Collect and verify binary
         run: |
-          binary=/tmp/envoy-pi4-build/envoy/arm64/source/exe/envoy/envoy
-          test -s "$binary"
+          archive=/tmp/envoy-pi4-build/envoy/arm64/bin/release.tar.zst
+          test -s "$archive"
+          member="$(tar --zstd -tf "$archive" | awk '$0 == "envoy" || $0 == "./envoy" { print; exit }')"
+          test -n "$member"
           mkdir -p compatibility/envoy-pi4/image
-          cp "$binary" compatibility/envoy-pi4/image/envoy
+          tar --zstd -xOf "$archive" "$member" > compatibility/envoy-pi4/image/envoy
+          chmod 0755 compatibility/envoy-pi4/image/envoy
           strip compatibility/envoy-pi4/image/envoy
           compatibility/envoy-pi4/image/envoy --version | tee compatibility/envoy-pi4/image/version.txt
           grep -q '1.39.6' compatibility/envoy-pi4/image/version.txt
