@@ -49,7 +49,7 @@ jobs:
         run: |
           archive=/tmp/envoy-pi4-build/envoy/arm64/bin/release.tar.zst
           test -s "$archive"
-          member="$(tar --zstd -tf "$archive" | awk '$0 == "envoy" || $0 == "./envoy" { print; exit }')"
+          member="$(tar --zstd -tf "$archive" | awk '$0 == "envoy" || $0 == "./envoy" { print }')"
           test -n "$member"
           mkdir -p compatibility/envoy-pi4/image
           tar --zstd -xOf "$archive" "$member" > compatibility/envoy-pi4/image/envoy
