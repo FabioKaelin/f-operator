@@ -15,7 +15,7 @@ jobs:
       ENVOY_COMMIT: aacd0340210b536e99ec44ebe59ab9d16b259552
       ENVOY_DOCKER_CI: '1'
       ENVOY_DOCKER_BUILD_DIR: /tmp/envoy-pi4-build
-      BAZEL_BUILD_EXTRA_OPTIONS: --define=tcmalloc=gperftools --jobs=2 --local_ram_resources=6144 --discard_analysis_cache
+      BAZEL_BUILD_EXTRA_OPTIONS: --define=tcmalloc=gperftools --jobs=4 --local_ram_resources=6144 --discard_analysis_cache --disk_cache=/build/envoy/bazel-action-cache
     steps:
       - uses: actions/checkout@v6
       - name: Prepare isolated hosted runner
@@ -23,13 +23,28 @@ jobs:
           # Only unused SDKs on the disposable GitHub runner, never production storage.
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           df -h /
+          nproc
+          free -m
           test "$(uname -m)" = aarch64
           git clone --filter=blob:none --no-checkout https://github.com/envoyproxy/envoy.git envoy-source
           git -C envoy-source checkout "$ENVOY_COMMIT"
           test "$(git -C envoy-source rev-parse HEAD)" = "$ENVOY_COMMIT"
+      - uses: actions/cache/restore@v4
+        id: envoycache
+        with:
+          path: /tmp/envoy-pi4-build/envoy/bazel-action-cache
+          key: envoy-pi4-v1396-gperftools-arm64-${{ github.run_id }}
+          restore-keys: envoy-pi4-v1396-gperftools-arm64-
       - name: Build exact release with compatible allocator
         working-directory: envoy-source
-        run: ./ci/run_envoy_docker.sh './ci/do_ci.sh release.server_only'
+        run: |
+          status=0
+          timeout --kill-after=30s 300m ./ci/run_envoy_docker.sh './ci/do_ci.sh release.server_only' || status=$?
+          if [ "$status" -ne 0 ]; then
+            # This disposable runner belongs only to this build job.
+            docker ps -q | xargs -r docker stop --time 20 || true
+          fi
+          exit "$status"
       - name: Collect and verify binary
         run: |
           binary=/tmp/envoy-pi4-build/envoy/arm64/source/exe/envoy/envoy
@@ -59,4 +74,9 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
-          tags: ghcr.io/fabiokaelin/envoy-pi4:v1.39.6-gperftools-20261030
+          tags: ghcr.io/fabiokaelin/envoy-pi4:v1.39.6-gperftools-20261031
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: /tmp/envoy-pi4-build/envoy/bazel-action-cache
+          key: ${{ steps.envoycache.outputs.cache-primary-key }}
