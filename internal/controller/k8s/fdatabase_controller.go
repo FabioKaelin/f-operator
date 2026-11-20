@@ -214,7 +214,7 @@ func (r *FdatabaseReconciler) deploymentForFDatabase(fdatabase *k8sv1.Fdatabase)
 					ImagePullSecrets:             []corev1.LocalObjectReference{{Name: "regcred"}},
 					Containers: []corev1.Container{{
 						Name:            name,
-						Image:           "ghcr.io/fabiokaelin/patched-mariadb@sha256:9464a9ed3a2e4f23a40e49d2ddda1abdf8dd21f59dcd5bdc79b45148e886872a",
+						Image:           "ghcr.io/fabiokaelin/security-refresh-patched-mariadb@sha256:0e3eaedb494ad3a0877b5cdc71ab968ca2b725c06da643e7d0d4e53d389cd9f3",
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 3306,
